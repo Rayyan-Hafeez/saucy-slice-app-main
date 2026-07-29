@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, Home } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -8,16 +8,68 @@ export const Route = createFileRoute("/checkout")({
   component: Checkout,
 });
 
+function formatPrice(value: number) {
+  return `Rs. ${value.toLocaleString("en-PK")}`;
+}
+
 function Checkout() {
+  const navigate = useNavigate();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  
+  // Real cart state
+  const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
 
-  const handlePlaceOrder = () => {
+  // Load the real cart from localStorage when the page opens
+  useEffect(() => {
+    const savedCart = localStorage.getItem("saucy_cart");
+    if (savedCart) {
+      setCart(JSON.parse(savedCart));
+    } else {
+      // If no cart is found, boot them back to the home page
+      navigate({ to: "/" });
+    }
+  }, [navigate]);
+
+  const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  // Form states
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+
+  const handlePlaceOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !phone || !address) {
+      alert("Please fill in all delivery details before placing your order.");
+      return;
+    }
+
     setIsPlacingOrder(true);
-    // Simulate a network request taking 1.5 seconds to make it feel real
+
+    // Build the dynamic item list for WhatsApp
+    const orderDetails = cart.map(item => `${item.quantity}x ${item.name} (${formatPrice(item.price * item.quantity)})`).join('%0A');
+
+    // Format the final WhatsApp message
+    const restaurantWhatsAppNumber = "923001234567"; // Manager's real number
+    const message = `*NEW ORDER RECEIVED - Pizza Saucy*%0A%0A` +
+      `*Customer:* ${name}%0A` +
+      `*Phone:* ${phone}%0A` +
+      `*Address:* ${address}%0A%0A` +
+      `*ORDER DETAILS:*%0A${orderDetails}%0A%0A` +
+      `*Total Due:* ${formatPrice(cartTotal)}%0A` +
+      `*Payment:* Cash on Delivery%0A` +
+      `*Status:* Pending confirmation`;
+
     setTimeout(() => {
       setIsPlacingOrder(false);
       setOrderSuccess(true);
+      
+      // Clear the cart since the order is placed
+      localStorage.removeItem("saucy_cart");
+      
+      // Open WhatsApp
+      window.open(`https://wa.me/${restaurantWhatsAppNumber}?text=${message}`, "_blank");
     }, 1500);
   };
 
@@ -42,19 +94,18 @@ function Checkout() {
         <div className="mx-auto max-w-5xl w-full">
           
           {orderSuccess ? (
-            // SUCCESS SCREEN
             <Card className="border-border/60 shadow-lg max-w-lg mx-auto text-center overflow-hidden">
               <div className="bg-green-500 p-8 flex justify-center">
                 <CheckCircle className="h-20 w-20 text-white animate-in zoom-in duration-500" />
               </div>
               <CardContent className="p-8 space-y-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-foreground mb-2">Order Confirmed!</h2>
-                  <p className="text-muted-foreground">Your delicious Pizza Saucy order has been received and is being prepared.</p>
+                  <h2 className="text-3xl font-bold text-foreground mb-2">Order Placed!</h2>
+                  <p className="text-muted-foreground">WhatsApp has opened with your order details sent directly to Pizza Saucy.</p>
                 </div>
                 
                 <div className="bg-secondary/30 rounded-xl p-4 mb-6">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Order Number</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Order Reference</p>
                   <p className="text-xl font-bold tracking-widest text-primary">
                     #PS-{Math.floor(1000 + Math.random() * 9000)}
                   </p>
@@ -62,14 +113,13 @@ function Checkout() {
 
                 <Link to="/" className="block">
                   <Button size="lg" className="w-full gap-2 text-base font-bold rounded-xl shadow-md">
-                    <Home className="h-5 w-5" /> Return to Menu
+                    Return to Menu
                   </Button>
                 </Link>
               </CardContent>
             </Card>
           ) : (
-            // NORMAL CHECKOUT SCREEN
-            <>
+            <form onSubmit={handlePlaceOrder}>
               <h1 className="text-3xl font-bold tracking-tight text-foreground mb-8">Secure Checkout</h1>
               
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -84,19 +134,40 @@ function Checkout() {
                           <label className="text-sm font-medium text-foreground">Full Name</label>
                           <div className="relative">
                             <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <input type="text" placeholder="Ali Raza" className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                            <input 
+                              type="text" 
+                              required
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              placeholder="Ali Raza" 
+                              className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" 
+                            />
                           </div>
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-foreground">Phone Number</label>
                           <div className="relative">
                             <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <input type="tel" placeholder="0300 1234567" className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" />
+                            <input 
+                              type="tel" 
+                              required
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              placeholder="0300 1234567" 
+                              className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" 
+                            />
                           </div>
                         </div>
                         <div className="space-y-2 md:col-span-2">
                           <label className="text-sm font-medium text-foreground">Complete Address</label>
-                          <textarea placeholder="House Number, Street, Sector / Block..." rows={3} className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none"></textarea>
+                          <textarea 
+                            required
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder="House Number, Street, Sector / Block..." 
+                            rows={3} 
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none"
+                          ></textarea>
                         </div>
                       </div>
                     </CardContent>
@@ -107,7 +178,7 @@ function Checkout() {
                       <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                         <Banknote className="h-5 w-5 text-primary" /> Payment Method
                       </h2>
-                      <div className="border-2 border-primary bg-primary/5 rounded-xl p-4 flex items-center justify-between cursor-pointer">
+                      <div className="border-2 border-primary bg-primary/5 rounded-xl p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="h-4 w-4 rounded-full border-4 border-primary bg-background"></div>
                           <span className="font-bold text-foreground">Cash on Delivery</span>
@@ -124,51 +195,48 @@ function Checkout() {
                       <h2 className="text-xl font-bold mb-4">Order Summary</h2>
                       
                       <div className="space-y-3 mb-6 pb-6 border-b border-border/50">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">1x Extreme Double Layer</span>
-                          <span className="font-medium">Rs. 1,650</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">2x Loaded Fries</span>
-                          <span className="font-medium">Rs. 1,400</span>
-                        </div>
+                        {cart.map((item) => (
+                          <div key={item.id} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{item.quantity}x {item.name}</span>
+                            <span className="font-medium text-foreground">{formatPrice(item.price * item.quantity)}</span>
+                          </div>
+                        ))}
                       </div>
 
                       <div className="space-y-2 mb-6">
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>Subtotal</span>
-                          <span>Rs. 3,050</span>
-                        </div>
                         <div className="flex justify-between text-sm text-muted-foreground">
                           <span>Delivery Fee</span>
                           <span>Free</span>
                         </div>
                         <div className="flex justify-between text-lg font-bold text-foreground pt-2 border-t border-border/50">
                           <span>Total</span>
-                          <span className="text-primary">Rs. 3,050</span>
+                          <span className="text-primary">{formatPrice(cartTotal)}</span>
                         </div>
                       </div>
 
                       <Button 
+                        type="submit"
                         size="lg" 
-                        onClick={handlePlaceOrder}
-                        disabled={isPlacingOrder}
-                        className="w-full text-base font-bold rounded-xl shadow-md transition-transform active:scale-95"
+                        disabled={isPlacingOrder || cart.length === 0}
+                        className="w-full text-base font-bold rounded-xl shadow-md transition-transform active:scale-95 bg-[#25D366] hover:bg-[#128C7E] text-white"
                       >
                         {isPlacingOrder ? (
                           <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Processing...
+                            Sending...
                           </>
                         ) : (
-                          "Place Order"
+                          <>
+                            <MessageCircle className="mr-2 h-5 w-5" />
+                            Order via WhatsApp
+                          </>
                         )}
                       </Button>
                     </CardContent>
                   </Card>
                 </div>
               </div>
-            </>
+            </form>
           )}
           
         </div>

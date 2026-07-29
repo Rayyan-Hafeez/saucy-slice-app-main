@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MapPin, Pizza, ShoppingBag, ChevronRight, X, Plus, Minus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -110,8 +110,22 @@ function formatPrice(value: number) {
 
 function Index() {
   const [branch, setBranch] = useState(BRANCHES[0].value);
-  const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
+  
+  // UPDATED: Initialize cart from localStorage so it persists
+  const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>(() => {
+    if (typeof window !== "undefined") {
+      const savedCart = localStorage.getItem("saucy_cart");
+      return savedCart ? JSON.parse(savedCart) : [];
+    }
+    return [];
+  });
+  
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // UPDATED: Sync cart to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("saucy_cart", JSON.stringify(cart));
+  }, [cart]);
 
   const addToCart = (item: { name: string; price: number }) => {
     setCart((prev) => {
