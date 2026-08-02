@@ -1,12 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { Search, ChevronLeft, Pizza, ChefHat, Bike, CheckCircle, Star } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, Search, Clock, ChefHat, Bike, CheckCircle, Store, MapPin, Phone, User, Star } from "lucide-react";
 
 export const Route = createFileRoute("/track")({
   component: TrackOrder,
@@ -14,202 +12,247 @@ export const Route = createFileRoute("/track")({
 
 type Order = {
   id: string;
-  order_ref: string;
-  status: string;
+  created_at: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
   order_details: string;
   total_price: number;
-  rating: number | null; // NEW: Added rating to our Order type
+  status: string;
+  order_ref: string;
+  rating: number | null;
 };
+
+function formatPrice(value: number) {
+  return `Rs. ${Math.round(value).toLocaleString("en-PK")}`;
+}
 
 function TrackOrder() {
   const [searchQuery, setSearchQuery] = useState("");
   const [order, setOrder] = useState<Order | null>(null);
+  const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  
-  // NEW: Rating states
-  const [hoveredStar, setHoveredStar] = useState(0);
-  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [ratedSubmitted, setRatedSubmitted] = useState(false);
+
+  // Real-time listener for the active tracked order
+  useEffect(() => {
+    if (!order) return;
+
+    const channel = supabase
+      .channel(`order-track-${order.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${order.id}` },
+        (payload) => {
+          setOrder(payload.new as Order);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [order?.id]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const query = searchQuery.trim();
+    if (!query) return;
 
     setLoading(true);
-    setError("");
-    setOrder(null);
+    setSearched(true);
 
-    const rawSearch = searchQuery.trim();
-    const upperSearch = rawSearch.toUpperCase();
-    
-    const numberOnly = upperSearch.replace(/^PS-/, "");
-    const withPrefix = `PS-${numberOnly}`;
-
-    const { data, error: searchError } = await supabase
+    const { data } = await supabase
       .from("orders")
       .select("*")
-      .or(`order_ref.eq.${numberOnly},order_ref.eq.${withPrefix},customer_phone.eq.${rawSearch}`)
+      .or(`order_ref.eq.${query},customer_phone.eq.${query}`)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (searchError || !data) {
-      setError("Order not found. Please check your reference number or phone number.");
+    if (data && data.length > 0) {
+      setOrder(data[0]);
+      if (data[0].rating) {
+        setRating(data[0].rating);
+        setRatedSubmitted(true);
+      }
     } else {
-      setOrder(data);
+      setOrder(null);
     }
     setLoading(false);
   };
 
-  // NEW: Function to submit the rating to Supabase
-  const submitRating = async (ratingValue: number) => {
-    if (!order || order.rating) return;
-    
-    setIsSubmittingRating(true);
-    
-    const { error } = await supabase
-      .from('orders')
-      .update({ rating: ratingValue })
-      .eq('id', order.id);
-      
-    if (!error) {
-      // Update the local state so the UI shows the filled stars instantly
-      setOrder({ ...order, rating: ratingValue });
-    } else {
-      alert("Failed to submit rating. Please try again.");
+  const submitRating = async (stars: number) => {
+    if (!order) return;
+    setRating(stars);
+    setRatedSubmitted(true);
+
+    await supabase
+      .from("orders")
+      .update({ rating: stars })
+      .eq("id", order.id);
+  };
+
+  const steps = [
+    { name: "Pending", label: "Order Received", icon: Clock },
+    { name: "Preparing", label: "Kitchen Preparing", icon: ChefHat },
+    { name: "Out for Delivery", label: "Out for Delivery", icon: Bike },
+    { name: "Delivered", label: "Delivered", icon: CheckCircle },
+  ];
+
+  const getCurrentStepIndex = (status: string) => {
+    switch (status) {
+      case "Pending": return 0;
+      case "Preparing": return 1;
+      case "Out for Delivery": return 2;
+      case "Delivered": return 3;
+      case "Archived": return 3;
+      default: return 0;
     }
-    
-    setIsSubmittingRating(false);
   };
 
-  const displayStatus = order?.status === "Archived" ? "Delivered" : order?.status;
-
-  const getStepStatus = (stepName: string) => {
-    const statuses = ["Pending", "Preparing", "Out for Delivery", "Delivered"];
-    const currentIndex = statuses.indexOf(displayStatus || "Pending");
-    const stepIndex = statuses.indexOf(stepName);
-
-    if (currentIndex >= stepIndex) return "active";
-    return "inactive";
-  };
+  const currentStepIdx = order ? getCurrentStepIndex(order.status) : 0;
 
   return (
-    <div className="min-h-screen bg-secondary/20 flex flex-col">
-      <header className="w-full bg-background border-b border-border/50 p-4">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-[#FDFBF7] flex flex-col">
+      <header className="w-full bg-[#FDFBF7] border-b border-border/50 p-4 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto flex justify-between items-center">
           <Link to="/" className="flex items-center text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
             <ChevronLeft className="w-4 h-4 mr-1" /> Back to Menu
           </Link>
           <div className="flex items-center gap-2">
             <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Pizza className="h-4 w-4" />
+              <Store className="h-4 w-4" />
             </div>
-            <span className="font-bold text-foreground text-lg">Pizza Saucy</span>
+            <span className="font-bold text-foreground text-lg">Track Order</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center pt-12 px-4 pb-12">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Track Your Order</h1>
-          <p className="text-muted-foreground">Enter your phone number or Order Reference.</p>
-        </div>
-
-        <form onSubmit={handleSearch} className="w-full max-w-md flex gap-2 mb-8">
-          <Input
-            type="text"
-            placeholder="PS-2420 or Phone Number"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-background h-12 rounded-xl"
-          />
-          <Button type="submit" className="bg-primary hover:bg-primary/90 h-12 w-12 rounded-xl shrink-0" disabled={loading}>
-            <Search className="w-5 h-5" />
-          </Button>
-        </form>
-
-        {error && <p className="text-destructive mb-4 font-medium">{error}</p>}
-
-        {order && (
-          <Card className="w-full max-w-md border-border/60 shadow-lg bg-background overflow-hidden animate-in fade-in zoom-in duration-300">
-            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-primary/5">
-              <h3 className="font-bold text-lg text-foreground">
-                Order {order.order_ref?.startsWith('PS-') ? '' : '#'}{order.order_ref || order.id.split('-')[0].toUpperCase()}
-              </h3>
-              <Badge className="bg-primary text-primary-foreground uppercase tracking-wider font-bold">
-                {displayStatus}
-              </Badge>
+      <main className="flex-1 max-w-3xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+        
+        <Card className="border-border/60 shadow-lg bg-background rounded-3xl overflow-hidden">
+          <CardContent className="p-6 sm:p-8">
+            <div className="text-center max-w-md mx-auto mb-6">
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground">Track Your Pizza Live</h1>
+              <p className="text-muted-foreground text-sm mt-1">Enter your 4-digit Order Reference or Phone Number.</p>
             </div>
 
-            <CardContent className="p-6">
-              <div className="flex justify-between mb-10 relative px-2">
-                <div className="absolute top-5 left-6 right-6 h-0.5 bg-secondary -z-10" />
-
-                <div className="flex flex-col items-center bg-background px-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Pending") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
-                    <Pizza className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Pending</span>
-                </div>
-
-                <div className="flex flex-col items-center bg-background px-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Preparing") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
-                    <ChefHat className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Preparing</span>
-                </div>
-
-                <div className="flex flex-col items-center bg-background px-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Out for Delivery") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
-                    <Bike className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Delivering</span>
-                </div>
-
-                <div className="flex flex-col items-center bg-background px-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Delivered") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
-                    <CheckCircle className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Done</span>
-                </div>
+            <form onSubmit={handleSearch} className="flex gap-2 max-w-md mx-auto">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-muted-foreground" />
+                <Input 
+                  required
+                  placeholder="e.g. 4873 or 03001234567"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-12 pl-10 bg-secondary/20 border-border/60 rounded-xl"
+                />
               </div>
+              <Button type="submit" disabled={loading} className="h-12 px-6 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white">
+                {loading ? "Searching..." : "Track"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-              <div className="bg-secondary/30 p-4 rounded-xl border border-border/50">
-                <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">Your Items</p>
-                <p className="font-medium text-foreground whitespace-pre-wrap">{order.order_details}</p>
-              </div>
-
-              {/* NEW: 5-Star Rating UI (Only shows when order is Delivered or Archived) */}
-              {displayStatus === "Delivered" && (
-                <div className="mt-6 pt-6 border-t border-border/50 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <h4 className="font-bold text-foreground mb-4">
-                    {order.rating ? "Thanks for your feedback!" : "How was your food?"}
-                  </h4>
-                  <div className="flex justify-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        disabled={!!order.rating || isSubmittingRating}
-                        onClick={() => submitRating(star)}
-                        onMouseEnter={() => setHoveredStar(star)}
-                        onMouseLeave={() => setHoveredStar(0)}
-                        className="transition-transform hover:scale-110 disabled:hover:scale-100 p-1"
-                      >
-                        <Star
-                          className={`w-8 h-8 ${
-                            (order.rating ? star <= order.rating : star <= hoveredStar)
-                              ? "fill-amber-400 text-amber-400 drop-shadow-sm"
-                              : "text-muted-foreground opacity-30"
-                          } transition-all duration-200`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {searched && !order && !loading && (
+          <div className="text-center py-12 bg-background rounded-3xl border border-border/50 shadow-sm">
+            <Store className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-40" />
+            <h3 className="text-lg font-bold text-foreground">No order found</h3>
+            <p className="text-sm text-muted-foreground mt-1">Please check your reference number or phone number and try again.</p>
+          </div>
         )}
+
+        {order && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <Card className="border-border/60 shadow-lg bg-background rounded-3xl overflow-hidden">
+              <CardContent className="p-6 sm:p-8 space-y-8">
+                
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border/50 pb-6">
+                  <div>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Reference</span>
+                    <h2 className="text-3xl font-black text-primary">#{order.order_ref || order.id.split('-')[0].toUpperCase()}</h2>
+                  </div>
+                  <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full font-bold text-sm">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                    </span>
+                    Status: {order.status}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative">
+                  {steps.map((step, idx) => {
+                    const isCompleted = idx <= currentStepIdx;
+                    const isCurrent = idx === currentStepIdx;
+                    const StepIcon = step.icon;
+
+                    return (
+                      <div key={step.name} className={`flex flex-col items-center text-center p-4 rounded-2xl border transition-all duration-300 ${isCurrent ? 'bg-primary/5 border-primary shadow-sm' : isCompleted ? 'bg-secondary/30 border-border/50' : 'bg-background border-border/30 opacity-40'}`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-colors ${isCompleted ? 'bg-primary text-primary-foreground shadow-md' : 'bg-secondary text-muted-foreground'}`}>
+                          <StepIcon className="w-6 h-6" />
+                        </div>
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Step {idx + 1}</span>
+                        <h4 className="text-sm font-bold text-foreground mt-0.5">{step.label}</h4>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border/50">
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-foreground text-base">Customer Information</h3>
+                    <div className="text-sm space-y-1 text-muted-foreground bg-secondary/30 p-4 rounded-2xl">
+                      <p className="flex items-center gap-2"><User className="w-4 h-4 text-primary" /> <strong className="text-foreground">{order.customer_name}</strong></p>
+                      <p className="flex items-center gap-2"><Phone className="w-4 h-4 text-primary" /> <span className="text-foreground">{order.customer_phone}</span></p>
+                      <p className="flex items-start gap-2 pt-1"><MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" /> <span className="text-foreground">{order.customer_address}</span></p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-foreground text-base">Order Breakdown</h3>
+                    <div className="bg-secondary/30 p-4 rounded-2xl space-y-3 text-sm">
+                      <p className="font-medium text-foreground whitespace-pre-wrap">{order.order_details}</p>
+                      <div className="pt-3 border-t border-border/50 flex justify-between font-black text-base">
+                        <span>Total Paid:</span>
+                        <span className="text-primary">{formatPrice(order.total_price)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {(order.status === 'Delivered' || order.status === 'Archived') && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 p-6 rounded-3xl text-center space-y-3 animate-in fade-in">
+                    <h3 className="font-bold text-lg text-foreground">How was your Pizza Saucy experience?</h3>
+                    <p className="text-sm text-muted-foreground">Tap a star to rate your order!</p>
+                    
+                    <div className="flex justify-center gap-2 pt-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => submitRating(star)}
+                          className="p-1 transition-transform hover:scale-110 active:scale-95 focus:outline-none"
+                        >
+                          <Star 
+                            className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-amber-400 drop-shadow" : "text-slate-300"}`} 
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    {ratedSubmitted && (
+                      <p className="text-xs font-bold text-green-600 pt-1">Thank you for your feedback!</p>
+                    )}
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
       </main>
     </div>
   );
