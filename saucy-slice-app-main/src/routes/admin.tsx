@@ -25,8 +25,8 @@ function formatPrice(value: number) {
   return `Rs. ${value.toLocaleString("en-PK")}`;
 }
 
-// Helper to format timestamps nicely (e.g., Aug 2, 2026, 10:45 PM)
-function formatDate(isoString: string) {
+// Format full timestamp for individual cards (e.g., Aug 2, 2026, 10:45 PM)
+function formatDateTime(isoString: string) {
   const date = new Date(isoString);
   return date.toLocaleDateString("en-US", {
     month: "short",
@@ -35,6 +35,16 @@ function formatDate(isoString: string) {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+  });
+}
+
+// Format just the date for section grouping (e.g., October 8, 2026)
+function formatGroupDate(isoString: string) {
+  const date = new Date(isoString);
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
@@ -122,11 +132,21 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
-  // DATA CALCULATIONS & FILTERING
+  // DATA CALCULATIONS & GROUPING
   // ----------------------------------------------------------------
   
   const activeOrders = orders.filter(o => o.status !== 'Archived');
   const archivedOrders = orders.filter(o => o.status === 'Archived');
+
+  // Group archived orders by calendar date
+  const groupedArchivedOrders = archivedOrders.reduce((acc, order) => {
+    const dateKey = formatGroupDate(order.created_at);
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(order);
+    return acc;
+  }, {} as Record<string, Order[]>);
 
   // Analytics Metrics
   const now = new Date();
@@ -312,7 +332,7 @@ function AdminDashboard() {
                         <div className="flex justify-between items-start">
                           <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
                           <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
-                            <Clock className="w-3 h-3" /> {formatDate(order.created_at)}
+                            <Clock className="w-3 h-3" /> {formatDateTime(order.created_at)}
                           </span>
                         </div>
                         <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
@@ -360,17 +380,17 @@ function AdminDashboard() {
         )}
 
         {/* =========================================
-            TAB 2: ARCHIVE SECTION
+            TAB 2: ARCHIVE SECTION (GROUPED BY DATE)
             ========================================= */}
         {activeTab === 'archive' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="space-y-8 animate-in fade-in duration-300">
             <div className="flex justify-between items-end">
               <div>
                 <h1 className="text-3xl font-bold text-foreground">Archived Orders</h1>
-                <p className="text-muted-foreground mt-1">Past completed orders sorted by date and time.</p>
+                <p className="text-muted-foreground mt-1">Past completed orders automatically grouped by calendar date.</p>
               </div>
               <div className="bg-slate-800 text-slate-200 px-4 py-2 rounded-lg font-bold">
-                {archivedOrders.length} Archived
+                {archivedOrders.length} Total Archived
               </div>
             </div>
 
@@ -381,48 +401,64 @@ function AdminDashboard() {
                 <p className="text-sm text-muted-foreground">Orders you archive from the queue will appear here.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {archivedOrders.map((order) => (
-                  <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col bg-background/60">
-                    <div className="p-4 border-b bg-slate-700 text-white flex justify-between items-center">
-                      <span className="font-bold text-sm tracking-wider">
-                        {order.order_ref ? `#${order.order_ref}` : `#${order.id.split('-')[0].toUpperCase()}`}
-                      </span>
-                      <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
-                        ARCHIVED
+              <div className="space-y-10">
+                {Object.entries(groupedArchivedOrders).map(([dateLabel, dateOrders]) => (
+                  <div key={dateLabel} className="space-y-4">
+                    {/* Date Section Header */}
+                    <div className="flex items-center gap-3 border-b border-border/60 pb-2">
+                      <CalendarDays className="h-5 w-5 text-primary" />
+                      <h2 className="text-xl font-bold text-foreground">{dateLabel}</h2>
+                      <span className="text-xs font-semibold bg-secondary px-2.5 py-1 rounded-full text-muted-foreground">
+                        {dateOrders.length} {dateOrders.length === 1 ? 'order' : 'orders'}
                       </span>
                     </div>
 
-                    <CardContent className="p-5 flex-1 flex flex-col">
-                      <div className="mb-4">
-                        <div className="flex justify-between items-start">
-                          <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
-                            <Clock className="w-3 h-3" /> {formatDate(order.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
-                        <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
-                          {order.customer_address}
-                        </p>
-                      </div>
+                    {/* Cards Grid for this specific date */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {dateOrders.map((order) => (
+                        <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col bg-background/60">
+                          <div className="p-4 border-b bg-slate-700 text-white flex justify-between items-center">
+                            <span className="font-bold text-sm tracking-wider">
+                              {order.order_ref ? `#${order.order_ref}` : `#${order.id.split('-')[0].toUpperCase()}`}
+                            </span>
+                            <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
+                              ARCHIVED
+                            </span>
+                          </div>
 
-                      <div className="mb-6 flex-1">
-                        <p className="text-sm font-medium text-muted-foreground mb-1">Items:</p>
-                        <p className="font-medium text-foreground">{order.order_details}</p>
-                        <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Total Collected:</span>
-                          <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
-                        </div>
-                      </div>
+                          <CardContent className="p-5 flex-1 flex flex-col">
+                            <div className="mb-4">
+                              <div className="flex justify-between items-start">
+                                <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
+                                  <Clock className="w-3 h-3" /> {formatDateTime(order.created_at)}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
+                              <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
+                                {order.customer_address}
+                              </p>
+                            </div>
 
-                      <div className="mt-auto pt-2">
-                        <Button onClick={() => restoreOrder(order.id)} variant="outline" className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
-                          <RotateCcw className="mr-2 h-4 w-4" /> Restore to Queue
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                            <div className="mb-6 flex-1">
+                              <p className="text-sm font-medium text-muted-foreground mb-1">Items:</p>
+                              <p className="font-medium text-foreground">{order.order_details}</p>
+                              <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Total Collected:</span>
+                                <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
+                              </div>
+                            </div>
+
+                            <div className="mt-auto pt-2">
+                              <Button onClick={() => restoreOrder(order.id)} variant="outline" className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
+                                <RotateCcw className="mr-2 h-4 w-4" /> Restore to Queue
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
