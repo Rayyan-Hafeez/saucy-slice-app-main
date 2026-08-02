@@ -160,7 +160,42 @@ function AdminDashboard() {
   const monthlyOrders = orders.filter(o => { const date = new Date(o.created_at); return date.getMonth() === currentMonth && date.getFullYear() === currentYear; });
   const monthlyRevenue = monthlyOrders.reduce((sum, order) => sum + order.total_price, 0);
   const totalRevenue = orders.reduce((sum, order) => sum + order.total_price, 0);
-  
+  const totalOrdersCount = orders.length;
+
+  const pendingCount = activeOrders.filter(o => o.status === 'Pending').length;
+  const preparingCount = activeOrders.filter(o => o.status === 'Preparing').length;
+  const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
+  const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
+
+  const ratedOrders = orders.filter(o => o.rating !== null && o.rating > 0);
+  const totalRatingsCount = ratedOrders.length;
+  const averageRating = totalRatingsCount > 0 
+    ? (ratedOrders.reduce((sum, order) => sum + order.rating!, 0) / totalRatingsCount).toFixed(1)
+    : "N/A";
+
+  const bestSeller = (() => {
+    const itemCounts: Record<string, number> = {};
+    orders.forEach(order => {
+      const items = order.order_details.split(', ');
+      items.forEach(itemStr => {
+        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          const qty = parseInt(match[1], 10);
+          const name = match[2];
+          itemCounts[name] = (itemCounts[name] || 0) + qty;
+        } else {
+          itemCounts[itemStr] = (itemCounts[itemStr] || 0) + 1;
+        }
+      });
+    });
+    let bestName = "N/A";
+    let maxQty = 0;
+    for (const [name, qty] of Object.entries(itemCounts)) {
+      if (qty > maxQty) { maxQty = qty; bestName = name; }
+    }
+    return { name: bestName, qty: maxQty };
+  })();
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -244,62 +279,107 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* PROMOS TAB */}
+        {activeTab === 'archive' && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="flex justify-between items-end">
+              <div><h1 className="text-3xl font-bold">Archived Orders</h1><p className="text-muted-foreground mt-1">Past completed orders grouped by date.</p></div>
+              <div className="bg-slate-800 text-slate-200 px-4 py-2 rounded-lg font-bold">{archivedOrders.length} Total</div>
+            </div>
+            {archivedOrders.length === 0 ? (
+              <div className="text-center py-20 bg-background rounded-xl border"><Archive className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50"/><h2 className="text-xl font-semibold text-muted-foreground">No archived orders yet.</h2></div>
+            ) : (
+              <div className="space-y-10">
+                {Object.entries(groupedArchivedOrders).map(([dateLabel, dateOrders]) => (
+                  <div key={dateLabel} className="space-y-4">
+                    <div className="flex items-center gap-3 border-b pb-2"><CalendarDays className="h-5 w-5 text-primary" /><h2 className="text-xl font-bold">{dateLabel}</h2></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {dateOrders.map((order) => (
+                        <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col bg-background/60">
+                          <div className="p-4 border-b bg-slate-700 text-white flex justify-between items-center"><span className="font-bold">#{order.order_ref}</span><span className="font-bold bg-white/20 px-2 py-1 rounded text-xs">ARCHIVED</span></div>
+                          <CardContent className="p-5 flex-1 flex flex-col">
+                            <div className="mb-4">
+                              <h3 className="font-bold text-lg">{order.customer_name}</h3>
+                              <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
+                              <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">{order.customer_address}</p>
+                            </div>
+                            <div className="mb-6 flex-1">
+                              <p className="font-medium whitespace-pre-wrap">{order.order_details}</p>
+                              <div className="mt-3 pt-3 border-t flex justify-between font-bold"><span>Total:</span><span>{formatPrice(order.total_price)}</span></div>
+                              {order.rating && (
+                                <div className="mt-3 pt-3 border-t flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Rating:</span>
+                                  <div className="flex gap-0.5">{[1, 2, 3, 4, 5].map(s => <Star key={s} className={`w-4 h-4 ${s <= order.rating! ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} />)}</div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-auto pt-2">
+                              <Button onClick={() => printReceipt(order)} variant="outline"><Printer className="mr-2 w-4 h-4" /> Print</Button>
+                              <Button onClick={() => restoreOrder(order.id)} variant="outline" className="text-blue-600"><RotateCcw className="mr-2 w-4 h-4" /> Restore</Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div><h1 className="text-3xl font-bold">Revenue Analytics</h1><p className="text-muted-foreground mt-1">Real-time performance metrics.</p></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+              <Card className="border-border/60 bg-background"><CardContent className="p-6"><p className="text-sm text-muted-foreground">Store Rating</p><h3 className="text-2xl font-bold mt-1">{averageRating} / 5.0</h3><p className="text-xs text-amber-500 font-bold mt-1">{totalRatingsCount} reviews</p></CardContent></Card>
+              <Card className="border-border/60 bg-background"><CardContent className="p-6"><p className="text-sm text-muted-foreground">Revenue ({monthName})</p><h3 className="text-2xl font-bold mt-1">{formatPrice(monthlyRevenue)}</h3></CardContent></Card>
+              <Card className="border-border/60 bg-background"><CardContent className="p-6"><p className="text-sm text-muted-foreground">Lifetime Revenue</p><h3 className="text-2xl font-bold mt-1">{formatPrice(totalRevenue)}</h3></CardContent></Card>
+              <Card className="border-border/60 bg-background"><CardContent className="p-6"><p className="text-sm text-muted-foreground">Top Selling Item</p><h3 className="text-lg font-bold truncate mt-1">{bestSeller.name}</h3><p className="text-xs text-primary font-bold mt-1">{bestSeller.qty} units</p></CardContent></Card>
+              <Card className="border-border/60 bg-background"><CardContent className="p-6"><p className="text-sm text-muted-foreground">Total Orders</p><h3 className="text-2xl font-bold mt-1">{totalOrdersCount}</h3></CardContent></Card>
+            </div>
+            <h2 className="text-xl font-bold mt-8 mb-4">Workflow Status</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl text-center"><span className="block text-3xl font-bold text-orange-600">{pendingCount}</span><span className="text-sm text-orange-800">Pending</span></div>
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center"><span className="block text-3xl font-bold text-blue-600">{preparingCount}</span><span className="text-sm text-blue-800">Preparing</span></div>
+              <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl text-center"><span className="block text-3xl font-bold text-purple-600">{deliveringCount}</span><span className="text-sm text-purple-800">Out for Delivery</span></div>
+              <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center"><span className="block text-3xl font-bold text-green-600">{deliveredCount}</span><span className="text-sm text-green-800">Delivered</span></div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'promos' && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            <div>
-              <h1 className="text-3xl font-bold">Promo Codes</h1>
-              <p className="text-muted-foreground mt-1">Create and manage discounts for your customers.</p>
-            </div>
-
+            <div><h1 className="text-3xl font-bold">Promo Codes</h1><p className="text-muted-foreground mt-1">Create and manage discounts.</p></div>
             <div className="grid lg:grid-cols-3 gap-8 items-start">
               <Card className="lg:col-span-1 shadow-sm border-border/60">
                 <CardContent className="p-6">
                   <h3 className="font-bold text-lg flex items-center gap-2 mb-4"><PlusCircle className="text-primary w-5 h-5"/> Create Promo</h3>
                   <form onSubmit={handleAddPromo} className="space-y-4">
-                    <div>
-                      <label className="text-sm font-semibold">Code Name</label>
-                      <Input placeholder="e.g. FREEDRINK" value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())} className="mt-1 uppercase" required />
-                    </div>
+                    <div><label className="text-sm font-semibold">Code Name</label><Input placeholder="e.g. FREEDRINK" value={newPromoCode} onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())} className="mt-1 uppercase" required /></div>
                     <div>
                       <label className="text-sm font-semibold">Discount Type</label>
-                      <select 
-                        className="w-full mt-1 h-10 px-3 rounded-md border border-input bg-background text-sm"
-                        value={newPromoType} 
-                        onChange={(e) => setNewPromoType(e.target.value)}
-                      >
+                      <select className="w-full mt-1 h-10 px-3 rounded-md border border-input bg-background text-sm" value={newPromoType} onChange={(e) => setNewPromoType(e.target.value)}>
                         <option value="percentage">Percentage Off (%)</option>
                         <option value="fixed">Fixed Cash Off (Rs.)</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-sm font-semibold">Value</label>
-                      <Input type="number" placeholder={newPromoType === 'percentage' ? "e.g. 10" : "e.g. 200"} value={newPromoValue} onChange={(e) => setNewPromoValue(e.target.value)} className="mt-1" required min="1" />
-                    </div>
+                    <div><label className="text-sm font-semibold">Value</label><Input type="number" placeholder="Value" value={newPromoValue} onChange={(e) => setNewPromoValue(e.target.value)} className="mt-1" required min="1" /></div>
                     <Button type="submit" className="w-full bg-primary font-bold">Add Promo Code</Button>
                   </form>
                 </CardContent>
               </Card>
-
               <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {promos.length === 0 ? (
-                  <div className="col-span-full text-center py-12 bg-background border rounded-xl">
-                    <Tag className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3"/>
-                    <p className="font-medium text-muted-foreground">No promo codes active.</p>
-                  </div>
+                  <div className="col-span-full text-center py-12 bg-background border rounded-xl"><Tag className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3"/><p className="font-medium text-muted-foreground">No promo codes active.</p></div>
                 ) : (
                   promos.map((promo) => (
                     <Card key={promo.id} className="border-border/60 shadow-sm bg-background">
                       <CardContent className="p-5 flex justify-between items-center">
                         <div>
                           <h4 className="font-black text-xl text-primary uppercase tracking-wider">{promo.code}</h4>
-                          <p className="text-sm font-medium text-muted-foreground mt-1">
-                            {promo.type === 'percentage' ? `${promo.value}% OFF Order` : `Rs. ${promo.value} OFF Order`}
-                          </p>
+                          <p className="text-sm font-medium text-muted-foreground mt-1">{promo.type === 'percentage' ? `${promo.value}% OFF` : `Rs. ${promo.value} OFF`}</p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeletePromo(promo.id)} className="text-red-500 hover:bg-red-50 hover:text-red-600">
-                          <Trash2 className="w-5 h-5" />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeletePromo(promo.id)} className="text-red-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="w-5 h-5" /></Button>
                       </CardContent>
                     </Card>
                   ))
@@ -308,10 +388,6 @@ function AdminDashboard() {
             </div>
           </div>
         )}
-
-        {/* OTHER TABS */}
-        {activeTab === 'archive' && ( <div className="animate-in fade-in"><h1 className="text-3xl font-bold mb-6">Archived Orders</h1><p>Check code above for full archive UI.</p></div> )}
-        {activeTab === 'analytics' && ( <div className="animate-in fade-in"><h1 className="text-3xl font-bold mb-6">Revenue Analytics</h1><p>Check code above for analytics UI.</p></div> )}
 
       </main>
     </div>
