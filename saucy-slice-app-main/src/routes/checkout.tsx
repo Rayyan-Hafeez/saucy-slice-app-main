@@ -200,9 +200,6 @@ function Checkout() {
             <ChevronLeft className="w-4 h-4 mr-1" /> Back to Menu
           </Link>
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground">
-              <Pizza className="h-4 w-4" />
-            </div>
             <span className="font-bold text-foreground text-lg">Pizza Saucy</span>
           </div>
         </div>
@@ -231,7 +228,7 @@ function Checkout() {
                       <User className="absolute left-3.5 top-3.5 w-4 h-4 text-muted-foreground" />
                       <Input 
                         required 
-                        placeholder="Rayyan Hafeez" 
+                        placeholder="Ali Khan" 
                         className="h-12 pl-10 bg-secondary/20 border-border/60 rounded-xl"
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -246,7 +243,7 @@ function Checkout() {
                       <Input 
                         required 
                         type="tel" 
-                        placeholder="03214645415" 
+                        placeholder="0300 1234567" 
                         className="h-12 pl-10 bg-secondary/20 border-border/60 rounded-xl"
                         value={formData.phone}
                         onChange={(e) => setFormData({...formData, phone: e.target.value})}
