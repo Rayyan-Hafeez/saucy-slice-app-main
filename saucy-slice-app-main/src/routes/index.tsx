@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { MapPin, Pizza, ShoppingBag, ChevronRight, X, Plus, Minus, Trash2 } from "lucide-react";
+import { MapPin, Pizza, ShoppingBag, ChevronRight, X, Plus, Minus, Trash2, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -111,7 +111,6 @@ function formatPrice(value: number) {
 function Index() {
   const [branch, setBranch] = useState(BRANCHES[0].value);
   
-  // UPDATED: Initialize cart from localStorage so it persists
   const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>(() => {
     if (typeof window !== "undefined") {
       const savedCart = localStorage.getItem("saucy_cart");
@@ -121,8 +120,8 @@ function Index() {
   });
   
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW STATE FOR MOBILE MENU
 
-  // UPDATED: Sync cart to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("saucy_cart", JSON.stringify(cart));
   }, [cart]);
@@ -169,11 +168,14 @@ function Index() {
             </div>
             <span className="text-xl font-bold tracking-tight text-foreground">Pizza Saucy</span>
           </Link>
-          <nav className="flex items-center gap-3">
+          
+          <nav className="flex items-center gap-2 sm:gap-3">
+            {/* Desktop Links (Hidden on Mobile) */}
             <a href="#deals" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Deals</a>
             <a href="#menu-section" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Menu</a>
             <Link to="/track" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Track Order</Link>
             
+            {/* Cart Button */}
             <Button variant="ghost" size="icon" className="shrink-0 relative" onClick={() => setIsCartOpen(true)}>
               <ShoppingBag className="h-5 w-5" />
               {cartItemCount > 0 && (
@@ -181,6 +183,11 @@ function Index() {
                   {cartItemCount}
                 </span>
               )}
+            </Button>
+
+            {/* NEW: Mobile Hamburger Menu Button */}
+            <Button variant="ghost" size="icon" className="shrink-0 sm:hidden" onClick={() => setIsMobileMenuOpen(true)}>
+              <Menu className="h-6 w-6" />
             </Button>
           </nav>
         </div>
@@ -300,6 +307,7 @@ function Index() {
         </section>
       </main>
 
+      {/* CAR T SIDEBAR */}
       <div 
         className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 ${isCartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setIsCartOpen(false)}
@@ -356,6 +364,29 @@ function Index() {
               Checkout
             </Button>
           </Link>
+        </div>
+      </div>
+
+      {/* NEW: MOBILE NAVIGATION MENU SIDEBAR */}
+      <div 
+        className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 sm:hidden ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+      
+      <div className={`fixed top-0 right-0 h-full w-[250px] bg-background shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col sm:hidden ${isMobileMenuOpen ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="p-4 border-b border-border/50 flex items-center justify-between bg-card">
+          <div className="flex items-center gap-2">
+            <Pizza className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold">Menu</h2>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(false)} className="hover:bg-secondary rounded-full">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="flex flex-col p-4 gap-6">
+          <a href="#deals" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Value Deals</a>
+          <a href="#menu-section" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Full Menu</a>
+          <Link to="/track" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Track Order</Link>
         </div>
       </div>
 
