@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Red Circle Background matching your brand -->
+  <circle cx="32" cy="32" r="30" fill="#E11D48" />
+  
+  <!-- White Pizza Slice Icon -->
+  <g transform="translate(14, 14) scale(1.15)" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 11h.01" />
+    <path d="M11 15h.01" />
+    <path d="M16 16h.01" />
+    <path d="m2 12 20-10-10 20Z" />
+  </g>
+</svg>
