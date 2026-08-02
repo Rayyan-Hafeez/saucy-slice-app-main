@@ -120,7 +120,7 @@ function Index() {
   });
   
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW STATE FOR MOBILE MENU
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("saucy_cart", JSON.stringify(cart));
@@ -174,6 +174,7 @@ function Index() {
             <a href="#deals" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Deals</a>
             <a href="#menu-section" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Menu</a>
             <Link to="/track" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Track Order</Link>
+            <Link to="/profile" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Account</Link>
             
             {/* Cart Button */}
             <Button variant="ghost" size="icon" className="shrink-0 relative" onClick={() => setIsCartOpen(true)}>
@@ -185,7 +186,7 @@ function Index() {
               )}
             </Button>
 
-            {/* NEW: Mobile Hamburger Menu Button */}
+            {/* Mobile Hamburger Menu Button */}
             <Button variant="ghost" size="icon" className="shrink-0 sm:hidden" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu className="h-6 w-6" />
             </Button>
@@ -307,7 +308,7 @@ function Index() {
         </section>
       </main>
 
-      {/* CAR T SIDEBAR */}
+      {/* CART SIDEBAR */}
       <div 
         className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 ${isCartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setIsCartOpen(false)}
@@ -367,7 +368,7 @@ function Index() {
         </div>
       </div>
 
-      {/* NEW: MOBILE NAVIGATION MENU SIDEBAR */}
+      {/* MOBILE NAVIGATION MENU SIDEBAR */}
       <div 
         className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 sm:hidden ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setIsMobileMenuOpen(false)}
@@ -387,6 +388,7 @@ function Index() {
           <a href="#deals" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Value Deals</a>
           <a href="#menu-section" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Full Menu</a>
           <Link to="/track" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Track Order</Link>
+          <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Account</Link>
         </div>
       </div>
 
