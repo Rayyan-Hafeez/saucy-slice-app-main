@@ -132,15 +132,9 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
-  // THERMAL RECEIPT PRINT FUNCTION
+  // INVISIBLE IFRAME THERMAL RECEIPT PRINT (POP-UP BLOCKER PROOF)
   // ----------------------------------------------------------------
   const printReceipt = (order: Order) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) {
-      alert("Please allow pop-ups to print receipts.");
-      return;
-    }
-
     const orderNumber = order.order_ref || order.id.split('-')[0].toUpperCase();
     
     const htmlContent = `
@@ -203,20 +197,31 @@ function AdminDashboard() {
             <p>Thank you for choosing Pizza Saucy!</p>
             <p>System Powered by Rayyan Hafeez</p>
           </div>
-          
-          <script>
-            // Automatically print and close the hidden window
-            window.onload = function() { 
-              window.print(); 
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
         </body>
       </html>
     `;
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    // Create an invisible iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    // Write the receipt HTML into the iframe
+    const iframeDoc = iframe.contentWindow?.document;
+    if (iframeDoc) {
+      iframeDoc.open();
+      iframeDoc.write(htmlContent);
+      iframeDoc.close();
+
+      // Give it a tiny delay to render, trigger print, then remove the iframe
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+        }, 1000);
+      }, 250);
+    }
   };
 
 
