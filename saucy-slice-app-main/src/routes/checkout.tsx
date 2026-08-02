@@ -1,256 +1,294 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, Check, Search } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { ChevronLeft, Pizza, MapPin, Phone, User, Tag, CheckCircle2, AlertCircle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "../lib/supabase";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/checkout")({
   component: Checkout,
 });
 
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
+
+// ----------------------------------------------------------------
+// PROMO CODE CONFIGURATION
+// ----------------------------------------------------------------
+type PromoCode = {
+  type: 'percentage' | 'fixed';
+  value: number;
+};
+
+const ACTIVE_PROMOS: Record<string, PromoCode> = {
+  "SAUCY10": { type: 'percentage', value: 10 }, // 10% off
+  "SAUCY200": { type: 'fixed', value: 200 },    // Rs. 200 off
+};
+
 function formatPrice(value: number) {
-  return `Rs. ${value.toLocaleString("en-PK")}`;
+  return `Rs. ${Math.round(value).toLocaleString("en-PK")}`;
 }
 
 function Checkout() {
   const navigate = useNavigate();
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
-  const [finalOrderRef, setFinalOrderRef] = useState("");
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
+  // Form State
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    address: "",
+  });
+
+  // Promo Code State
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; details: PromoCode } | null>(null);
+  const [promoMessage, setPromoMessage] = useState({ text: "", type: "" }); // type: 'success' | 'error'
 
   useEffect(() => {
     const savedCart = localStorage.getItem("saucy_cart");
     if (savedCart) {
       setCart(JSON.parse(savedCart));
     } else {
+      // If cart is empty, send them back to the menu
       navigate({ to: "/" });
     }
   }, [navigate]);
 
-  const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+  // ----------------------------------------------------------------
+  // DISCOUNT CALCULATIONS
+  // ----------------------------------------------------------------
+  const subtotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+  
+  let discountAmount = 0;
+  if (appliedPromo) {
+    if (appliedPromo.details.type === 'percentage') {
+      discountAmount = subtotal * (appliedPromo.details.value / 100);
+    } else if (appliedPromo.details.type === 'fixed') {
+      discountAmount = appliedPromo.details.value;
+    }
+  }
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
+  // Ensure discount doesn't accidentally exceed the total price
+  discountAmount = Math.min(discountAmount, subtotal);
+  const finalTotal = subtotal - discountAmount;
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  const handleApplyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+
+    if (ACTIVE_PROMOS[code]) {
+      setAppliedPromo({ code, details: ACTIVE_PROMOS[code] });
+      setPromoMessage({ text: `'${code}' applied successfully!`, type: "success" });
+      setPromoInput("");
+    } else {
+      setPromoMessage({ text: "Invalid or expired promo code.", type: "error" });
+    }
+  };
+
+  const removePromo = () => {
+    setAppliedPromo(null);
+    setPromoMessage({ text: "", type: "" });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !address) {
-      alert("Please fill in all delivery details before placing your order.");
-      return;
+    if (cart.length === 0) return;
+    setIsSubmitting(true);
+
+    // Format the items list
+    let detailsString = cart.map((item) => `${item.quantity}x ${item.name}`).join(", ");
+    
+    // If a promo was used, append it to the order details so the kitchen sees it
+    if (appliedPromo) {
+      detailsString += `\n[PROMO APPLIED: ${appliedPromo.code} - ${formatPrice(discountAmount)} OFF]`;
     }
 
-    setIsPlacingOrder(true);
-    const orderDetailsText = cart.map(item => `${item.quantity}x ${item.name}`).join(', ');
-    
-    // Generate the unique tracking ID
-    const generatedRef = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Generate a random 4-digit order reference
+    const orderRef = Math.floor(1000 + Math.random() * 9000).toString();
 
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .insert([
-          {
-            customer_name: name,
-            customer_phone: phone,
-            customer_address: address,
-            order_details: orderDetailsText,
-            total_price: cartTotal,
-            order_ref: generatedRef
-          }
-        ]);
+    const { error } = await supabase.from("orders").insert({
+      customer_name: formData.name,
+      customer_phone: formData.phone,
+      customer_address: formData.address,
+      order_details: detailsString,
+      total_price: finalTotal,
+      status: "Pending",
+      order_ref: orderRef,
+    });
 
-      if (error) throw error;
-
-      setFinalOrderRef(generatedRef);
-      setIsPlacingOrder(false);
-      setOrderSuccess(true);
+    if (error) {
+      alert("Something went wrong. Please try again.");
+      setIsSubmitting(false);
+    } else {
+      // Clear cart and redirect to tracking page
       localStorage.removeItem("saucy_cart");
-      
-    } catch (error) {
-      console.error("Error saving order:", error);
-      alert("There was an error placing your order. Please try again.");
-      setIsPlacingOrder(false);
+      navigate({ to: "/track" });
     }
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-secondary/20">
-      <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="h-5 w-5" />
-            <span className="font-medium">Back to Menu</span>
+    <div className="min-h-screen bg-secondary/20 flex flex-col">
+      <header className="w-full bg-background border-b border-border/50 p-4 sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <Link to="/" className="flex items-center text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+            <ChevronLeft className="w-4 h-4 mr-1" /> Back to Menu
           </Link>
           <div className="flex items-center gap-2">
             <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground">
               <Pizza className="h-4 w-4" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-foreground">Pizza Saucy</span>
+            <span className="font-bold text-foreground text-lg">Checkout</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 py-10 px-4 sm:px-6 flex flex-col justify-center">
-        <div className="mx-auto max-w-5xl w-full">
-          
-          {orderSuccess ? (
-            <Card className="border-border/60 shadow-lg max-w-lg mx-auto text-center overflow-hidden animate-in fade-in zoom-in duration-500">
-              <div className="bg-green-500 p-8 flex justify-center">
-                <CheckCircle className="h-20 w-20 text-white" />
+      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        
+        {/* LEFT COLUMN: Customer Details */}
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Delivery Details</h1>
+            <p className="text-muted-foreground text-sm mt-1">Enter your information to complete the order.</p>
+          </div>
+
+          <form id="checkout-form" onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <User className="w-4 h-4 text-primary" /> Full Name
+              </label>
+              <Input 
+                required 
+                placeholder="Ali Raza" 
+                className="h-12 bg-background border-border/60"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Phone className="w-4 h-4 text-primary" /> Phone Number
+              </label>
+              <Input 
+                required 
+                type="tel" 
+                placeholder="0300 1234567" 
+                className="h-12 bg-background border-border/60"
+                value={formData.phone}
+                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-primary" /> Delivery Address
+              </label>
+              <Textarea 
+                required 
+                placeholder="Street number, house, area..." 
+                className="min-h-[100px] resize-none bg-background border-border/60"
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+              />
+            </div>
+          </form>
+        </div>
+
+        {/* RIGHT COLUMN: Order Summary & Promos */}
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <Card className="border-border/60 shadow-lg bg-background">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-bold text-foreground mb-4">Order Summary</h2>
+              
+              <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-2">
+                {cart.map((item) => (
+                  <div key={item.id} className="flex justify-between items-center text-sm">
+                    <div className="flex gap-2">
+                      <span className="font-bold text-muted-foreground">{item.quantity}x</span>
+                      <span className="font-medium text-foreground">{item.name}</span>
+                    </div>
+                    <span className="font-semibold">{formatPrice(item.price * item.quantity)}</span>
+                  </div>
+                ))}
               </div>
-              <CardContent className="p-8 space-y-6">
-                <div>
-                  <h2 className="text-3xl font-bold text-foreground mb-2">Order Placed Successfully!</h2>
-                  <p className="text-muted-foreground">Your order has been sent directly to our kitchen. We will start preparing it right away.</p>
+
+              {/* PROMO CODE SECTION */}
+              <div className="border-t border-border/50 pt-6 mb-6">
+                <label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                  <Tag className="w-4 h-4 text-primary" /> Have a Promo Code?
+                </label>
+                
+                {!appliedPromo ? (
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="Enter code (e.g. SAUCY10)" 
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value)}
+                      className="uppercase bg-secondary/30 border-border/60"
+                    />
+                    <Button type="button" onClick={handleApplyPromo} variant="secondary" className="font-bold">
+                      Apply
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 p-3 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="font-bold text-sm">{appliedPromo.code} Applied</span>
+                    </div>
+                    <button type="button" onClick={removePromo} className="text-xs font-bold text-red-500 hover:underline">
+                      Remove
+                    </button>
+                  </div>
+                )}
+                
+                {promoMessage.text && !appliedPromo && (
+                  <p className={`text-xs mt-2 flex items-center gap-1 ${promoMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                    {promoMessage.type === 'error' && <AlertCircle className="w-3 h-3" />}
+                    {promoMessage.text}
+                  </p>
+                )}
+              </div>
+
+              {/* TOTALS CALCULATION */}
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatPrice(subtotal)}</span>
                 </div>
                 
-                <div className="bg-secondary/30 rounded-xl p-4 mb-6">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Order Reference</p>
-                  <p className="text-xl font-bold tracking-widest text-primary">
-                    #{finalOrderRef}
-                  </p>
-                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm font-bold text-green-600">
+                    <span>Discount</span>
+                    <span>-{formatPrice(discountAmount)}</span>
+                  </div>
+                )}
 
-                <div className="space-y-3">
-                  <Link to="/" className="block">
-                    <Button size="lg" className="w-full gap-2 text-base font-bold rounded-xl shadow-md">
-                      Return to Menu
-                    </Button>
-                  </Link>
-                  <Link to="/track" className="block">
-                    <Button size="lg" variant="outline" className="w-full gap-2 text-base font-bold rounded-xl shadow-sm border-2">
-                      <Search className="h-5 w-5" /> Track My Order
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <form onSubmit={handlePlaceOrder}>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground mb-8">Secure Checkout</h1>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="p-6">
-                      <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                        <MapPin className="h-5 w-5 text-primary" /> Delivery Details
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">Full Name</label>
-                          <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <input 
-                              type="text" 
-                              required
-                              value={name}
-                              onChange={(e) => setName(e.target.value)}
-                              placeholder="Ali Raza" 
-                              className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" 
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-foreground">Phone Number</label>
-                          <div className="relative">
-                            <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <input 
-                              type="tel" 
-                              required
-                              value={phone}
-                              onChange={(e) => setPhone(e.target.value)}
-                              placeholder="0300 1234567" 
-                              className="w-full pl-10 pr-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" 
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2 md:col-span-2">
-                          <label className="text-sm font-medium text-foreground">Complete Address</label>
-                          <textarea 
-                            required
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            placeholder="House Number, Street, Sector / Block..." 
-                            rows={3} 
-                            className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm resize-none"
-                          ></textarea>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border/60 shadow-sm">
-                    <CardContent className="p-6">
-                      <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                        <Banknote className="h-5 w-5 text-primary" /> Payment Method
-                      </h2>
-                      <div className="border-2 border-primary bg-primary/5 rounded-xl p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="h-4 w-4 rounded-full border-4 border-primary bg-background"></div>
-                          <span className="font-bold text-foreground">Cash on Delivery</span>
-                        </div>
-                        <span className="text-sm font-medium text-primary">Pay at doorstep</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <Card className="border-border/60 shadow-md sticky top-24">
-                    <CardContent className="p-6">
-                      <h2 className="text-xl font-bold mb-4">Order Summary</h2>
-                      
-                      <div className="space-y-3 mb-6 pb-6 border-b border-border/50">
-                        {cart.map((item) => (
-                          <div key={item.id} className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">{item.quantity}x {item.name}</span>
-                            <span className="font-medium text-foreground">{formatPrice(item.price * item.quantity)}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="space-y-2 mb-6">
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>Delivery Fee</span>
-                          <span>Free</span>
-                        </div>
-                        <div className="flex justify-between text-lg font-bold text-foreground pt-2 border-t border-border/50">
-                          <span>Total</span>
-                          <span className="text-primary">{formatPrice(cartTotal)}</span>
-                        </div>
-                      </div>
-
-                      <Button 
-                        type="submit"
-                        size="lg" 
-                        disabled={isPlacingOrder || cart.length === 0}
-                        className="w-full text-base font-bold rounded-xl shadow-md transition-transform active:scale-95 bg-primary hover:bg-primary/90 text-primary-foreground"
-                      >
-                        {isPlacingOrder ? (
-                          <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="mr-2 h-5 w-5" />
-                            Confirm Order
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
+                <div className="flex justify-between items-center text-lg font-bold text-foreground pt-2">
+                  <span>Total</span>
+                  <span className="text-primary text-2xl">{formatPrice(finalTotal)}</span>
                 </div>
               </div>
-            </form>
-          )}
-          
+
+              <Button 
+                type="submit" 
+                form="checkout-form"
+                disabled={isSubmitting}
+                className="w-full h-14 text-lg font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-transform active:scale-[0.98] mt-6"
+              >
+                {isSubmitting ? "Processing..." : "Place Order (Cash on Delivery)"}
+              </Button>
+            </CardContent>
+          </Card>
         </div>
+
       </main>
     </div>
   );
