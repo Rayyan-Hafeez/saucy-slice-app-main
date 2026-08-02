@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock, Printer } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock, Printer, Star } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -19,13 +19,13 @@ type Order = {
   total_price: number;
   status: string;
   order_ref: string;
+  rating: number | null; // NEW: Added rating support
 };
 
 function formatPrice(value: number) {
   return `Rs. ${value.toLocaleString("en-PK")}`;
 }
 
-// Format full timestamp for individual cards (e.g., Aug 2, 2026, 10:45 PM)
 function formatDateTime(isoString: string) {
   const date = new Date(isoString);
   return date.toLocaleDateString("en-US", {
@@ -38,7 +38,6 @@ function formatDateTime(isoString: string) {
   });
 }
 
-// Format just the date for section grouping (e.g., October 8, 2026)
 function formatGroupDate(isoString: string) {
   const date = new Date(isoString);
   return date.toLocaleDateString("en-US", {
@@ -49,15 +48,11 @@ function formatGroupDate(isoString: string) {
 }
 
 function AdminDashboard() {
-  // Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState("");
   const SECRET_PIN = "1234";
 
-  // Dashboard Navigation State ('queue' | 'archive' | 'analytics')
   const [activeTab, setActiveTab] = useState<'queue' | 'archive' | 'analytics'>('queue');
-
-  // Order & Audio State
   const [orders, setOrders] = useState<Order[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -131,9 +126,6 @@ function AdminDashboard() {
     }
   };
 
-  // ----------------------------------------------------------------
-  // INVISIBLE IFRAME THERMAL RECEIPT PRINT (POP-UP BLOCKER PROOF)
-  // ----------------------------------------------------------------
   const printReceipt = (order: Order) => {
     const orderNumber = order.order_ref || order.id.split('-')[0].toUpperCase();
     
@@ -143,29 +135,18 @@ function AdminDashboard() {
           <title>Receipt #${orderNumber}</title>
           <style>
             @page { margin: 0; }
-            body { 
-              font-family: 'Courier New', Courier, monospace; 
-              padding: 20px; 
-              width: 300px; /* Standard 80mm thermal paper width */
-              margin: 0 auto; 
-              color: #000; 
-              background: #fff;
-            }
+            body { font-family: 'Courier New', Courier, monospace; padding: 20px; width: 300px; margin: 0 auto; color: #000; background: #fff; }
             .header { text-align: center; margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
             .title { font-size: 26px; font-weight: bold; margin: 0; text-transform: uppercase; }
             .subtitle { font-size: 14px; margin: 5px 0; }
             .order-num { font-size: 18px; font-weight: bold; margin: 10px 0 0 0; }
-            
             .details { margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
             .details p { margin: 4px 0; font-size: 14px; }
-            
             .items { margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
             .item-title { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
             .item-list { font-size: 14px; margin: 0; white-space: pre-wrap; line-height: 1.4; }
-            
             .total-section { text-align: right; margin-bottom: 20px; }
             .total { font-size: 20px; font-weight: bold; }
-            
             .footer { text-align: center; margin-top: 20px; font-size: 12px; }
             .footer p { margin: 4px 0; }
           </style>
@@ -176,44 +157,36 @@ function AdminDashboard() {
             <p class="subtitle">Hot, Fresh & Saucy</p>
             <p class="order-num">ORDER #${orderNumber}</p>
           </div>
-          
           <div class="details">
             <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
             <p><strong>Name:</strong> ${order.customer_name}</p>
             <p><strong>Phone:</strong> ${order.customer_phone}</p>
             <p><strong>Address:</strong><br/>${order.customer_address}</p>
           </div>
-          
           <div class="items">
             <div class="item-title">ORDER ITEMS:</div>
             <div class="item-list">${order.order_details}</div>
           </div>
-          
           <div class="total-section">
             <div class="total">TOTAL: ${formatPrice(order.total_price)}</div>
           </div>
-          
           <div class="footer">
             <p>Thank you for choosing Pizza Saucy!</p>
-            <p>System Powered by Rayyan Hafeez</p>
           </div>
         </body>
       </html>
     `;
 
-    // Create an invisible iframe
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     document.body.appendChild(iframe);
 
-    // Write the receipt HTML into the iframe
     const iframeDoc = iframe.contentWindow?.document;
     if (iframeDoc) {
       iframeDoc.open();
       iframeDoc.write(htmlContent);
       iframeDoc.close();
 
-      // Give it a tiny delay to render, trigger print, then remove the iframe
       setTimeout(() => {
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
@@ -223,7 +196,6 @@ function AdminDashboard() {
       }, 250);
     }
   };
-
 
   // ----------------------------------------------------------------
   // DATA CALCULATIONS & GROUPING
@@ -260,6 +232,13 @@ function AdminDashboard() {
   const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
   const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
 
+  // NEW: Ratings Calculations
+  const ratedOrders = orders.filter(o => o.rating !== null && o.rating > 0);
+  const totalRatingsCount = ratedOrders.length;
+  const averageRating = totalRatingsCount > 0 
+    ? (ratedOrders.reduce((sum, order) => sum + order.rating!, 0) / totalRatingsCount).toFixed(1)
+    : "N/A";
+
   const bestSeller = (() => {
     const itemCounts: Record<string, number> = {};
     orders.forEach(order => {
@@ -287,9 +266,6 @@ function AdminDashboard() {
     return { name: bestName, qty: maxQty };
   })();
 
-  // ----------------------------------------------------------------
-  // VIEW 1: THE LOCK SCREEN
-  // ----------------------------------------------------------------
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -331,9 +307,6 @@ function AdminDashboard() {
     );
   }
 
-  // ----------------------------------------------------------------
-  // VIEW 2: THE SECURE DASHBOARD WITH TABS
-  // ----------------------------------------------------------------
   return (
     <div className="min-h-screen bg-secondary/20 pb-10">
       <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-slate-900 text-white shadow-md">
@@ -344,7 +317,6 @@ function AdminDashboard() {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* MANAGER NAVIGATION TABS */}
             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
               <button 
                 onClick={() => setActiveTab('queue')} 
@@ -375,9 +347,6 @@ function AdminDashboard() {
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 pt-8">
         
-        {/* =========================================
-            TAB 1: LIVE ORDER QUEUE
-            ========================================= */}
         {activeTab === 'queue' && (
           <>
             <div className="flex justify-between items-end mb-6">
@@ -473,9 +442,6 @@ function AdminDashboard() {
           </>
         )}
 
-        {/* =========================================
-            TAB 2: ARCHIVE SECTION (GROUPED BY DATE)
-            ========================================= */}
         {activeTab === 'archive' && (
           <div className="space-y-8 animate-in fade-in duration-300">
             <div className="flex justify-between items-end">
@@ -539,6 +505,21 @@ function AdminDashboard() {
                                 <span className="text-sm text-muted-foreground">Total Collected:</span>
                                 <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
                               </div>
+
+                              {/* NEW: Displays the Star Rating left by the customer */}
+                              {order.rating && (
+                                <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
+                                  <span className="text-sm text-muted-foreground">Customer Rating:</span>
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                      <Star 
+                                        key={star} 
+                                        className={`w-4 h-4 ${star <= order.rating! ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} 
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-2 mt-auto pt-2">
@@ -560,9 +541,6 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* =========================================
-            TAB 3: ANALYTICS DASHBOARD
-            ========================================= */}
         {activeTab === 'analytics' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div>
@@ -570,8 +548,26 @@ function AdminDashboard() {
               <p className="text-muted-foreground mt-1">Real-time performance and historical metrics.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* UPGRADED: Added the Average Store Rating Card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
               
+              <Card className="border-border/60 shadow-sm bg-background">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Store Rating</p>
+                      <h3 className="text-2xl lg:text-3xl font-bold text-foreground">
+                        {averageRating} <span className="text-base text-muted-foreground font-normal">/ 5.0</span>
+                      </h3>
+                      <p className="text-sm font-bold text-amber-500 mt-1">{totalRatingsCount} reviews</p>
+                    </div>
+                    <div className="p-3 bg-amber-500/10 rounded-xl shrink-0">
+                      <Star className="h-6 w-6 text-amber-500 fill-amber-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card className="border-border/60 shadow-sm bg-background">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
