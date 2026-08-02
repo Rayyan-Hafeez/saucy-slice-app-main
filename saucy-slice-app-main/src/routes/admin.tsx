@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Trash2, ChevronLeft, Lock, KeyRound } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Trash2, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -29,19 +29,19 @@ function AdminDashboard() {
   // Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState("");
-  const SECRET_PIN = "1234"; // 🔒 Change this to whatever PIN you want!
+  const SECRET_PIN = "1234";
+
+  // Dashboard Navigation State
+  const [activeTab, setActiveTab] = useState<'queue' | 'analytics'>('queue');
 
   // Order & Audio State
   const [orders, setOrders] = useState<Order[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Setup the audio sound
   useEffect(() => {
-    // This is a classic "Restaurant Service Bell" sound
     audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
   }, []);
 
-  // Database Connection (Only runs AFTER they log in)
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -56,7 +56,6 @@ function AdminDashboard() {
           console.log("Database changed!", payload);
           fetchOrders(); 
           
-          // 🔔 Play the "Ding!" ONLY if a brand new order was just inserted
           if (payload.eventType === 'INSERT' && audioRef.current) {
             audioRef.current.play().catch(err => console.log("Audio blocked:", err));
           }
@@ -103,6 +102,30 @@ function AdminDashboard() {
       setPin("");
     }
   };
+
+  // ----------------------------------------------------------------
+  // ANALYTICS CALCULATIONS
+  // ----------------------------------------------------------------
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const monthName = now.toLocaleString('default', { month: 'long' });
+
+  // Filter orders for the current month
+  const monthlyOrders = orders.filter(o => {
+    const date = new Date(o.created_at);
+    return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+  });
+
+  const monthlyRevenue = monthlyOrders.reduce((sum, order) => sum + order.total_price, 0);
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total_price, 0);
+  const totalOrdersCount = orders.length;
+
+  const pendingCount = orders.filter(o => o.status === 'Pending').length;
+  const preparingCount = orders.filter(o => o.status === 'Preparing').length;
+  const deliveringCount = orders.filter(o => o.status === 'Out for Delivery').length;
+  const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
+
 
   // ----------------------------------------------------------------
   // VIEW 1: THE LOCK SCREEN
@@ -157,16 +180,26 @@ function AdminDashboard() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <Store className="h-5 w-5 text-primary" />
-            <span className="text-lg font-bold tracking-tight">Pizza Saucy | Live Kitchen POS</span>
+            <span className="hidden sm:inline text-lg font-bold tracking-tight">Pizza Saucy | Live Kitchen</span>
           </div>
+          
           <div className="flex items-center gap-4">
-            <span className="text-xs font-bold bg-green-500/20 text-green-400 px-3 py-1 rounded-full flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              SYSTEM LIVE
-            </span>
+            {/* TABS FOR MANAGER */}
+            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+              <button 
+                onClick={() => setActiveTab('queue')} 
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'queue' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
+              >
+                <ListOrdered className="w-4 h-4" /> Queue
+              </button>
+              <button 
+                onClick={() => setActiveTab('analytics')} 
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
+              >
+                <BarChart3 className="w-4 h-4" /> Analytics
+              </button>
+            </div>
+
             <Button variant="ghost" size="sm" onClick={() => setIsAuthenticated(false)} className="text-slate-300 hover:text-white">
               Lock
             </Button>
@@ -175,85 +208,180 @@ function AdminDashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 pt-8">
-        <div className="flex justify-between items-end mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Order Queue</h1>
-            <p className="text-muted-foreground mt-1">Listening for new orders in real-time...</p>
-          </div>
-          <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg font-bold">
-            {orders.length} Total Orders
-          </div>
-        </div>
+        
+        {/* =========================================
+            TAB 1: LIVE ORDER QUEUE
+            ========================================= */}
+        {activeTab === 'queue' && (
+          <>
+            <div className="flex justify-between items-end mb-6">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">Order Queue</h1>
+                <p className="text-muted-foreground mt-1">Listening for new orders in real-time...</p>
+              </div>
+              <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg font-bold flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+                {orders.length} Orders
+              </div>
+            </div>
 
-        {orders.length === 0 ? (
-          <div className="text-center py-20 bg-background rounded-xl border border-border/50">
-            <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h2 className="text-xl font-semibold text-muted-foreground">Kitchen is quiet...</h2>
-            <p className="text-sm text-muted-foreground">Waiting for new orders to arrive.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {orders.map((order) => (
-              <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-                
-                <div className={`p-4 border-b flex justify-between items-center text-white
-                  ${order.status === 'Pending' ? 'bg-orange-500' : ''}
-                  ${order.status === 'Preparing' ? 'bg-blue-500' : ''}
-                  ${order.status === 'Out for Delivery' ? 'bg-purple-500' : ''}
-                  ${order.status === 'Delivered' ? 'bg-green-500' : ''}
-                `}>
-                  <span className="font-bold text-sm tracking-wider">
-                    {order.order_ref ? `#${order.order_ref}` : `#${order.id.split('-')[0].toUpperCase()}`}
-                  </span>
-                  <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
-                    {order.status.toUpperCase()}
-                  </span>
-                </div>
+            {orders.length === 0 ? (
+              <div className="text-center py-20 bg-background rounded-xl border border-border/50">
+                <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h2 className="text-xl font-semibold text-muted-foreground">Kitchen is quiet...</h2>
+                <p className="text-sm text-muted-foreground">Waiting for new orders to arrive.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {orders.map((order) => (
+                  <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+                    <div className={`p-4 border-b flex justify-between items-center text-white
+                      ${order.status === 'Pending' ? 'bg-orange-500' : ''}
+                      ${order.status === 'Preparing' ? 'bg-blue-500' : ''}
+                      ${order.status === 'Out for Delivery' ? 'bg-purple-500' : ''}
+                      ${order.status === 'Delivered' ? 'bg-green-500' : ''}
+                    `}>
+                      <span className="font-bold text-sm tracking-wider">
+                        {order.order_ref ? `#${order.order_ref}` : `#${order.id.split('-')[0].toUpperCase()}`}
+                      </span>
+                      <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
+                        {order.status.toUpperCase()}
+                    </span>
+                    </div>
 
-                <CardContent className="p-5 flex-1 flex flex-col bg-background">
-                  <div className="mb-4">
-                    <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
-                    <p className="text-sm font-medium text-primary">{order.customer_phone}</p>
-                    <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
-                      {order.customer_address}
-                    </p>
-                  </div>
+                    <CardContent className="p-5 flex-1 flex flex-col bg-background">
+                      <div className="mb-4">
+                        <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
+                        <p className="text-sm font-medium text-primary">{order.customer_phone}</p>
+                        <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
+                          {order.customer_address}
+                        </p>
+                      </div>
 
-                  <div className="mb-6 flex-1">
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Items:</p>
-                    <p className="font-medium text-foreground">{order.order_details}</p>
-                    <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Total to Collect:</span>
-                      <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
+                      <div className="mb-6 flex-1">
+                        <p className="text-sm font-medium text-muted-foreground mb-1">Items:</p>
+                        <p className="font-medium text-foreground">{order.order_details}</p>
+                        <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Total to Collect:</span>
+                          <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-auto">
+                        {order.status === 'Pending' && (
+                          <Button onClick={() => updateStatus(order.id, 'Preparing')} className="col-span-2 bg-blue-500 hover:bg-blue-600">
+                            <ChefHat className="mr-2 h-4 w-4" /> Start Preparing
+                          </Button>
+                        )}
+                        {order.status === 'Preparing' && (
+                          <Button onClick={() => updateStatus(order.id, 'Out for Delivery')} className="col-span-2 bg-purple-500 hover:bg-purple-600">
+                            <Bike className="mr-2 h-4 w-4" /> Send to Delivery
+                          </Button>
+                        )}
+                        {order.status === 'Out for Delivery' && (
+                          <Button onClick={() => updateStatus(order.id, 'Delivered')} className="col-span-2 bg-green-500 hover:bg-green-600">
+                            <CheckCircle className="mr-2 h-4 w-4" /> Mark Delivered
+                          </Button>
+                        )}
+                        
+                        <Button onClick={() => deleteOrder(order.id)} variant="outline" className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-50 mt-2 border-red-200">
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete Record
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* =========================================
+            TAB 2: ANALYTICS DASHBOARD
+            ========================================= */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Revenue Analytics</h1>
+              <p className="text-muted-foreground mt-1">Real-time performance metrics.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Monthly Revenue Card */}
+              <Card className="border-border/60 shadow-sm bg-background">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Revenue ({monthName})</p>
+                      <h3 className="text-3xl font-bold text-foreground">{formatPrice(monthlyRevenue)}</h3>
+                    </div>
+                    <div className="p-3 bg-primary/10 rounded-xl">
+                      <CalendarDays className="h-6 w-6 text-primary" />
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
+                    <Activity className="h-3 w-3 text-green-500" /> Automatically updating
+                  </p>
+                </CardContent>
+              </Card>
 
-                  <div className="grid grid-cols-2 gap-2 mt-auto">
-                    {order.status === 'Pending' && (
-                      <Button onClick={() => updateStatus(order.id, 'Preparing')} className="col-span-2 bg-blue-500 hover:bg-blue-600">
-                        <ChefHat className="mr-2 h-4 w-4" /> Start Preparing
-                      </Button>
-                    )}
-                    {order.status === 'Preparing' && (
-                      <Button onClick={() => updateStatus(order.id, 'Out for Delivery')} className="col-span-2 bg-purple-500 hover:bg-purple-600">
-                        <Bike className="mr-2 h-4 w-4" /> Send to Delivery
-                      </Button>
-                    )}
-                    {order.status === 'Out for Delivery' && (
-                      <Button onClick={() => updateStatus(order.id, 'Delivered')} className="col-span-2 bg-green-500 hover:bg-green-600">
-                        <CheckCircle className="mr-2 h-4 w-4" /> Mark Delivered
-                      </Button>
-                    )}
-                    
-                    <Button onClick={() => deleteOrder(order.id)} variant="outline" className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-50 mt-2 border-red-200">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete Record
-                    </Button>
+              {/* Total Revenue Card */}
+              <Card className="border-border/60 shadow-sm bg-background">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Lifetime Revenue</p>
+                      <h3 className="text-3xl font-bold text-foreground">{formatPrice(totalRevenue)}</h3>
+                    </div>
+                    <div className="p-3 bg-green-500/10 rounded-xl">
+                      <DollarSign className="h-6 w-6 text-green-500" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+
+              {/* Total Orders Card */}
+              <Card className="border-border/60 shadow-sm bg-background">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Orders Processed</p>
+                      <h3 className="text-3xl font-bold text-foreground">{totalOrdersCount}</h3>
+                    </div>
+                    <div className="p-3 bg-blue-500/10 rounded-xl">
+                      <ListOrdered className="h-6 w-6 text-blue-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Workflow Status Breakdown */}
+            <h2 className="text-xl font-bold text-foreground mt-8 mb-4">Current Workflow Status</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl text-center">
+                <span className="block text-3xl font-bold text-orange-600">{pendingCount}</span>
+                <span className="text-sm font-medium text-orange-800">Pending</span>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center">
+                <span className="block text-3xl font-bold text-blue-600">{preparingCount}</span>
+                <span className="text-sm font-medium text-blue-800">Preparing</span>
+              </div>
+              <div className="bg-purple-50 border border-purple-200 p-4 rounded-xl text-center">
+                <span className="block text-3xl font-bold text-purple-600">{deliveringCount}</span>
+                <span className="text-sm font-medium text-purple-800">Out for Delivery</span>
+              </div>
+              <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center">
+                <span className="block text-3xl font-bold text-green-600">{deliveredCount}</span>
+                <span className="text-sm font-medium text-green-800">Delivered</span>
+              </div>
+            </div>
           </div>
         )}
+
       </main>
     </div>
   );
