@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, MessageCircle } from "lucide-react";
+import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { supabase } from "../lib/supabase";
 
 export const Route = createFileRoute("/checkout")({
   component: Checkout,
@@ -26,7 +27,6 @@ function Checkout() {
     if (savedCart) {
       setCart(JSON.parse(savedCart));
     } else {
-      // If no cart is found, boot them back to the home page
       navigate({ to: "/" });
     }
   }, [navigate]);
@@ -38,7 +38,7 @@ function Checkout() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !phone || !address) {
       alert("Please fill in all delivery details before placing your order.");
@@ -47,30 +47,35 @@ function Checkout() {
 
     setIsPlacingOrder(true);
 
-    // Build the dynamic item list for WhatsApp
-    const orderDetails = cart.map(item => `${item.quantity}x ${item.name} (${formatPrice(item.price * item.quantity)})`).join('%0A');
+    // Build a clean text version of the order for the database
+    const orderDetailsText = cart.map(item => `${item.quantity}x ${item.name}`).join(', ');
 
-    // Format the final WhatsApp message
-    const restaurantWhatsAppNumber = "923001234567"; // Manager's real number
-    const message = `*NEW ORDER RECEIVED - Pizza Saucy*%0A%0A` +
-      `*Customer:* ${name}%0A` +
-      `*Phone:* ${phone}%0A` +
-      `*Address:* ${address}%0A%0A` +
-      `*ORDER DETAILS:*%0A${orderDetails}%0A%0A` +
-      `*Total Due:* ${formatPrice(cartTotal)}%0A` +
-      `*Payment:* Cash on Delivery%0A` +
-      `*Status:* Pending confirmation`;
+    try {
+      // Push the data directly into your Supabase database!
+      const { error } = await supabase
+        .from('orders')
+        .insert([
+          {
+            customer_name: name,
+            customer_phone: phone,
+            customer_address: address,
+            order_details: orderDetailsText,
+            total_price: cartTotal
+          }
+        ]);
 
-    setTimeout(() => {
+      if (error) throw error;
+
+      // If successful, show the success screen and empty the cart
       setIsPlacingOrder(false);
       setOrderSuccess(true);
-      
-      // Clear the cart since the order is placed
       localStorage.removeItem("saucy_cart");
       
-      // Open WhatsApp
-      window.open(`https://wa.me/${restaurantWhatsAppNumber}?text=${message}`, "_blank");
-    }, 1500);
+    } catch (error) {
+      console.error("Error saving order:", error);
+      alert("There was an error placing your order. Please try again.");
+      setIsPlacingOrder(false);
+    }
   };
 
   return (
@@ -100,8 +105,8 @@ function Checkout() {
               </div>
               <CardContent className="p-8 space-y-6">
                 <div>
-                  <h2 className="text-3xl font-bold text-foreground mb-2">Order Placed!</h2>
-                  <p className="text-muted-foreground">WhatsApp has opened with your order details sent directly to Pizza Saucy.</p>
+                  <h2 className="text-3xl font-bold text-foreground mb-2">Order Placed Successfully!</h2>
+                  <p className="text-muted-foreground">Your order has been sent directly to our kitchen. We will start preparing it right away.</p>
                 </div>
                 
                 <div className="bg-secondary/30 rounded-xl p-4 mb-6">
@@ -218,17 +223,17 @@ function Checkout() {
                         type="submit"
                         size="lg" 
                         disabled={isPlacingOrder || cart.length === 0}
-                        className="w-full text-base font-bold rounded-xl shadow-md transition-transform active:scale-95 bg-[#25D366] hover:bg-[#128C7E] text-white"
+                        className="w-full text-base font-bold rounded-xl shadow-md transition-transform active:scale-95 bg-primary hover:bg-primary/90 text-primary-foreground"
                       >
                         {isPlacingOrder ? (
                           <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Sending...
+                            Processing...
                           </>
                         ) : (
                           <>
-                            <MessageCircle className="mr-2 h-5 w-5" />
-                            Order via WhatsApp
+                            <Check className="mr-2 h-5 w-5" />
+                            Confirm Order
                           </>
                         )}
                       </Button>
