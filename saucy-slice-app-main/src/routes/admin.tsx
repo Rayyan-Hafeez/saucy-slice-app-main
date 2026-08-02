@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Trash2, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -87,10 +87,11 @@ function AdminDashboard() {
     if (error) alert("Failed to update status.");
   }
 
-  async function deleteOrder(id: string) {
-    if (!confirm("Are you sure you want to delete this order?")) return;
-    const { error } = await supabase.from('orders').delete().eq('id', id);
-    if (error) alert("Failed to delete order.");
+  // Changed from Delete to Archive
+  async function archiveOrder(id: string) {
+    if (!confirm("Archive this order? It will clear from the queue but stay in your analytics.")) return;
+    const { error } = await supabase.from('orders').update({ status: 'Archived' }).eq('id', id);
+    if (error) alert("Failed to archive order.");
   }
 
   const handleLogin = (e: React.FormEvent) => {
@@ -104,14 +105,18 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
-  // ANALYTICS CALCULATIONS
+  // DATA CALCULATIONS
   // ----------------------------------------------------------------
+  
+  // Filter out archived orders for the Live Queue
+  const activeOrders = orders.filter(o => o.status !== 'Archived');
+
+  // Analytics Metrics
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
   const monthName = now.toLocaleString('default', { month: 'long' });
 
-  // Filter orders for the current month
   const monthlyOrders = orders.filter(o => {
     const date = new Date(o.created_at);
     return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
@@ -121,11 +126,39 @@ function AdminDashboard() {
   const totalRevenue = orders.reduce((sum, order) => sum + order.total_price, 0);
   const totalOrdersCount = orders.length;
 
-  const pendingCount = orders.filter(o => o.status === 'Pending').length;
-  const preparingCount = orders.filter(o => o.status === 'Preparing').length;
-  const deliveringCount = orders.filter(o => o.status === 'Out for Delivery').length;
-  const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
+  const pendingCount = activeOrders.filter(o => o.status === 'Pending').length;
+  const preparingCount = activeOrders.filter(o => o.status === 'Preparing').length;
+  const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
+  const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
 
+  // Calculate the most selling product
+  const bestSeller = (() => {
+    const itemCounts: Record<string, number> = {};
+    orders.forEach(order => {
+      // Split the order details by comma (e.g., "2x Deal No. 1, 1x Zinger")
+      const items = order.order_details.split(', ');
+      items.forEach(itemStr => {
+        const match = itemStr.match(/^(\d+)x\s+(.+)$/);
+        if (match) {
+          const qty = parseInt(match[1], 10);
+          const name = match[2];
+          itemCounts[name] = (itemCounts[name] || 0) + qty;
+        } else {
+          itemCounts[itemStr] = (itemCounts[itemStr] || 0) + 1;
+        }
+      });
+    });
+    
+    let bestName = "N/A";
+    let maxQty = 0;
+    for (const [name, qty] of Object.entries(itemCounts)) {
+      if (qty > maxQty) {
+        maxQty = qty;
+        bestName = name;
+      }
+    }
+    return { name: bestName, qty: maxQty };
+  })();
 
   // ----------------------------------------------------------------
   // VIEW 1: THE LOCK SCREEN
@@ -184,7 +217,6 @@ function AdminDashboard() {
           </div>
           
           <div className="flex items-center gap-4">
-            {/* TABS FOR MANAGER */}
             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
               <button 
                 onClick={() => setActiveTab('queue')} 
@@ -224,11 +256,11 @@ function AdminDashboard() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                 </span>
-                {orders.length} Orders
+                {activeOrders.length} Active
               </div>
             </div>
 
-            {orders.length === 0 ? (
+            {activeOrders.length === 0 ? (
               <div className="text-center py-20 bg-background rounded-xl border border-border/50">
                 <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <h2 className="text-xl font-semibold text-muted-foreground">Kitchen is quiet...</h2>
@@ -236,7 +268,7 @@ function AdminDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {orders.map((order) => (
+                {activeOrders.map((order) => (
                   <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
                     <div className={`p-4 border-b flex justify-between items-center text-white
                       ${order.status === 'Pending' ? 'bg-orange-500' : ''}
@@ -249,7 +281,7 @@ function AdminDashboard() {
                       </span>
                       <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
                         {order.status.toUpperCase()}
-                    </span>
+                      </span>
                     </div>
 
                     <CardContent className="p-5 flex-1 flex flex-col bg-background">
@@ -287,8 +319,9 @@ function AdminDashboard() {
                           </Button>
                         )}
                         
-                        <Button onClick={() => deleteOrder(order.id)} variant="outline" className="col-span-2 text-red-500 hover:text-red-600 hover:bg-red-50 mt-2 border-red-200">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete Record
+                        {/* New Archive Button */}
+                        <Button onClick={() => archiveOrder(order.id)} variant="outline" className="col-span-2 text-slate-500 hover:text-slate-600 hover:bg-slate-100 mt-2 border-slate-200">
+                          <Archive className="mr-2 h-4 w-4" /> Archive Record
                         </Button>
                       </div>
                     </CardContent>
@@ -306,19 +339,19 @@ function AdminDashboard() {
           <div className="space-y-6 animate-in fade-in duration-300">
             <div>
               <h1 className="text-3xl font-bold text-foreground">Revenue Analytics</h1>
-              <p className="text-muted-foreground mt-1">Real-time performance metrics.</p>
+              <p className="text-muted-foreground mt-1">Real-time performance and historical metrics.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Monthly Revenue Card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              
               <Card className="border-border/60 shadow-sm bg-background">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-1">Revenue ({monthName})</p>
-                      <h3 className="text-3xl font-bold text-foreground">{formatPrice(monthlyRevenue)}</h3>
+                      <h3 className="text-2xl lg:text-3xl font-bold text-foreground">{formatPrice(monthlyRevenue)}</h3>
                     </div>
-                    <div className="p-3 bg-primary/10 rounded-xl">
+                    <div className="p-3 bg-primary/10 rounded-xl shrink-0">
                       <CalendarDays className="h-6 w-6 text-primary" />
                     </div>
                   </div>
@@ -328,38 +361,53 @@ function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Total Revenue Card */}
               <Card className="border-border/60 shadow-sm bg-background">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Lifetime Revenue</p>
-                      <h3 className="text-3xl font-bold text-foreground">{formatPrice(totalRevenue)}</h3>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Lifetime Revenue</p>
+                      <h3 className="text-2xl lg:text-3xl font-bold text-foreground">{formatPrice(totalRevenue)}</h3>
                     </div>
-                    <div className="p-3 bg-green-500/10 rounded-xl">
+                    <div className="p-3 bg-green-500/10 rounded-xl shrink-0">
                       <DollarSign className="h-6 w-6 text-green-500" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Total Orders Card */}
               <Card className="border-border/60 shadow-sm bg-background">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Orders Processed</p>
-                      <h3 className="text-3xl font-bold text-foreground">{totalOrdersCount}</h3>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Top Selling Item</p>
+                      <h3 className="text-xl font-bold text-foreground truncate pr-2" title={bestSeller.name}>
+                        {bestSeller.name}
+                      </h3>
+                      <p className="text-sm font-bold text-primary mt-1">{bestSeller.qty} units sold</p>
                     </div>
-                    <div className="p-3 bg-blue-500/10 rounded-xl">
+                    <div className="p-3 bg-amber-500/10 rounded-xl shrink-0">
+                      <Trophy className="h-6 w-6 text-amber-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/60 shadow-sm bg-background">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Orders</p>
+                      <h3 className="text-2xl lg:text-3xl font-bold text-foreground">{totalOrdersCount}</h3>
+                    </div>
+                    <div className="p-3 bg-blue-500/10 rounded-xl shrink-0">
                       <ListOrdered className="h-6 w-6 text-blue-500" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
+              
             </div>
 
-            {/* Workflow Status Breakdown */}
             <h2 className="text-xl font-bold text-foreground mt-8 mb-4">Current Workflow Status</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl text-center">
