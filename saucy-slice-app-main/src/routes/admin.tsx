@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock, Printer, Star } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock, Printer, Star, MessageCircle } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -19,7 +19,7 @@ type Order = {
   total_price: number;
   status: string;
   order_ref: string;
-  rating: number | null; // NEW: Added rating support
+  rating: number | null;
 };
 
 function formatPrice(value: number) {
@@ -198,6 +198,24 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
+  // WHATSAPP INTEGRATION
+  // ----------------------------------------------------------------
+  const openWhatsApp = (order: Order) => {
+    // Strips all spaces or dashes from the phone number
+    let phone = order.customer_phone.replace(/\D/g, '');
+    
+    // Automatically convert local 03xx numbers to +92 format for WhatsApp API
+    if (phone.startsWith('0')) {
+      phone = '92' + phone.substring(1);
+    }
+
+    const orderNum = order.order_ref || order.id.split('-')[0].toUpperCase();
+    const message = encodeURIComponent(`Hi ${order.customer_name}, this is Pizza Saucy! 🍕 We are reaching out regarding your Order #${orderNum}.`);
+    
+    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+  };
+
+  // ----------------------------------------------------------------
   // DATA CALCULATIONS & GROUPING
   // ----------------------------------------------------------------
   
@@ -232,7 +250,6 @@ function AdminDashboard() {
   const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
   const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
 
-  // NEW: Ratings Calculations
   const ratedOrders = orders.filter(o => o.rating !== null && o.rating > 0);
   const totalRatingsCount = ratedOrders.length;
   const averageRating = totalRatingsCount > 0 
@@ -427,6 +444,15 @@ function AdminDashboard() {
                           </Button>
                         )}
                         
+                        {/* NEW: WhatsApp Integration Button */}
+                        <Button 
+                          onClick={() => openWhatsApp(order)} 
+                          variant="outline" 
+                          className="col-span-2 bg-[#25D366]/10 text-[#25D366] border-[#25D366]/50 hover:bg-[#25D366]/20 transition-colors"
+                        >
+                          <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp Customer
+                        </Button>
+
                         <Button onClick={() => printReceipt(order)} variant="outline" className="w-full text-slate-700 border-slate-300 hover:bg-slate-100">
                           <Printer className="mr-2 h-4 w-4" /> Print
                         </Button>
@@ -506,7 +532,6 @@ function AdminDashboard() {
                                 <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
                               </div>
 
-                              {/* NEW: Displays the Star Rating left by the customer */}
                               {order.rating && (
                                 <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
                                   <span className="text-sm text-muted-foreground">Customer Rating:</span>
@@ -548,7 +573,6 @@ function AdminDashboard() {
               <p className="text-muted-foreground mt-1">Real-time performance and historical metrics.</p>
             </div>
 
-            {/* UPGRADED: Added the Average Store Rating Card */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
               
               <Card className="border-border/60 shadow-sm bg-background">
