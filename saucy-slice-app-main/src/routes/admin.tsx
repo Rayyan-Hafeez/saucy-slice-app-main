@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -132,13 +132,101 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
+  // THERMAL RECEIPT PRINT FUNCTION
+  // ----------------------------------------------------------------
+  const printReceipt = (order: Order) => {
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert("Please allow pop-ups to print receipts.");
+      return;
+    }
+
+    const orderNumber = order.order_ref || order.id.split('-')[0].toUpperCase();
+    
+    const htmlContent = `
+      <html>
+        <head>
+          <title>Receipt #${orderNumber}</title>
+          <style>
+            @page { margin: 0; }
+            body { 
+              font-family: 'Courier New', Courier, monospace; 
+              padding: 20px; 
+              width: 300px; /* Standard 80mm thermal paper width */
+              margin: 0 auto; 
+              color: #000; 
+              background: #fff;
+            }
+            .header { text-align: center; margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
+            .title { font-size: 26px; font-weight: bold; margin: 0; text-transform: uppercase; }
+            .subtitle { font-size: 14px; margin: 5px 0; }
+            .order-num { font-size: 18px; font-weight: bold; margin: 10px 0 0 0; }
+            
+            .details { margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
+            .details p { margin: 4px 0; font-size: 14px; }
+            
+            .items { margin-bottom: 15px; border-bottom: 2px dashed #000; padding-bottom: 15px; }
+            .item-title { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+            .item-list { font-size: 14px; margin: 0; white-space: pre-wrap; line-height: 1.4; }
+            
+            .total-section { text-align: right; margin-bottom: 20px; }
+            .total { font-size: 20px; font-weight: bold; }
+            
+            .footer { text-align: center; margin-top: 20px; font-size: 12px; }
+            .footer p { margin: 4px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="title">PIZZA SAUCY</h1>
+            <p class="subtitle">Hot, Fresh & Saucy</p>
+            <p class="order-num">ORDER #${orderNumber}</p>
+          </div>
+          
+          <div class="details">
+            <p><strong>Date:</strong> ${formatDateTime(order.created_at)}</p>
+            <p><strong>Name:</strong> ${order.customer_name}</p>
+            <p><strong>Phone:</strong> ${order.customer_phone}</p>
+            <p><strong>Address:</strong><br/>${order.customer_address}</p>
+          </div>
+          
+          <div class="items">
+            <div class="item-title">ORDER ITEMS:</div>
+            <div class="item-list">${order.order_details}</div>
+          </div>
+          
+          <div class="total-section">
+            <div class="total">TOTAL: ${formatPrice(order.total_price)}</div>
+          </div>
+          
+          <div class="footer">
+            <p>Thank you for choosing Pizza Saucy!</p>
+            <p>System Powered by Rayyan Hafeez</p>
+          </div>
+          
+          <script>
+            // Automatically print and close the hidden window
+            window.onload = function() { 
+              window.print(); 
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+
+  // ----------------------------------------------------------------
   // DATA CALCULATIONS & GROUPING
   // ----------------------------------------------------------------
   
   const activeOrders = orders.filter(o => o.status !== 'Archived');
   const archivedOrders = orders.filter(o => o.status === 'Archived');
 
-  // Group archived orders by calendar date
   const groupedArchivedOrders = archivedOrders.reduce((acc, order) => {
     const dateKey = formatGroupDate(order.created_at);
     if (!acc[dateKey]) {
@@ -148,7 +236,6 @@ function AdminDashboard() {
     return acc;
   }, {} as Record<string, Order[]>);
 
-  // Analytics Metrics
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -168,7 +255,6 @@ function AdminDashboard() {
   const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
   const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
 
-  // Best Seller calculation
   const bestSeller = (() => {
     const itemCounts: Record<string, number> = {};
     orders.forEach(order => {
@@ -367,8 +453,11 @@ function AdminDashboard() {
                           </Button>
                         )}
                         
-                        <Button onClick={() => archiveOrder(order.id)} variant="outline" className="col-span-2 text-slate-500 hover:text-slate-600 hover:bg-slate-100 mt-2 border-slate-200">
-                          <Archive className="mr-2 h-4 w-4" /> Archive Record
+                        <Button onClick={() => printReceipt(order)} variant="outline" className="w-full text-slate-700 border-slate-300 hover:bg-slate-100">
+                          <Printer className="mr-2 h-4 w-4" /> Print
+                        </Button>
+                        <Button onClick={() => archiveOrder(order.id)} variant="outline" className="w-full text-slate-500 hover:text-slate-600 hover:bg-slate-100 border-slate-200">
+                          <Archive className="mr-2 h-4 w-4" /> Archive
                         </Button>
                       </div>
                     </CardContent>
@@ -404,7 +493,6 @@ function AdminDashboard() {
               <div className="space-y-10">
                 {Object.entries(groupedArchivedOrders).map(([dateLabel, dateOrders]) => (
                   <div key={dateLabel} className="space-y-4">
-                    {/* Date Section Header */}
                     <div className="flex items-center gap-3 border-b border-border/60 pb-2">
                       <CalendarDays className="h-5 w-5 text-primary" />
                       <h2 className="text-xl font-bold text-foreground">{dateLabel}</h2>
@@ -413,7 +501,6 @@ function AdminDashboard() {
                       </span>
                     </div>
 
-                    {/* Cards Grid for this specific date */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {dateOrders.map((order) => (
                         <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col bg-background/60">
@@ -449,9 +536,12 @@ function AdminDashboard() {
                               </div>
                             </div>
 
-                            <div className="mt-auto pt-2">
+                            <div className="grid grid-cols-2 gap-2 mt-auto pt-2">
+                              <Button onClick={() => printReceipt(order)} variant="outline" className="w-full text-slate-700 border-slate-300 hover:bg-slate-100">
+                                <Printer className="mr-2 h-4 w-4" /> Print
+                              </Button>
                               <Button onClick={() => restoreOrder(order.id)} variant="outline" className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
-                                <RotateCcw className="mr-2 h-4 w-4" /> Restore to Queue
+                                <RotateCcw className="mr-2 h-4 w-4" /> Restore
                               </Button>
                             </div>
                           </CardContent>
