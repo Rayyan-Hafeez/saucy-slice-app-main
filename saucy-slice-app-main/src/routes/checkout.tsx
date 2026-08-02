@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, Check } from "lucide-react";
+import { Pizza, ChevronLeft, MapPin, Phone, User, Banknote, CheckCircle, Loader2, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "../lib/supabase";
@@ -17,11 +17,10 @@ function Checkout() {
   const navigate = useNavigate();
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [finalOrderRef, setFinalOrderRef] = useState("");
   
-  // Real cart state
   const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>([]);
 
-  // Load the real cart from localStorage when the page opens
   useEffect(() => {
     const savedCart = localStorage.getItem("saucy_cart");
     if (savedCart) {
@@ -33,7 +32,6 @@ function Checkout() {
 
   const cartTotal = cart.reduce((total, item) => total + item.price * item.quantity, 0);
 
-  // Form states
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
@@ -46,12 +44,12 @@ function Checkout() {
     }
 
     setIsPlacingOrder(true);
-
-    // Build a clean text version of the order for the database
     const orderDetailsText = cart.map(item => `${item.quantity}x ${item.name}`).join(', ');
+    
+    // Generate the unique tracking ID
+    const generatedRef = `PS-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
-      // Push the data directly into your Supabase database!
       const { error } = await supabase
         .from('orders')
         .insert([
@@ -60,13 +58,14 @@ function Checkout() {
             customer_phone: phone,
             customer_address: address,
             order_details: orderDetailsText,
-            total_price: cartTotal
+            total_price: cartTotal,
+            order_ref: generatedRef
           }
         ]);
 
       if (error) throw error;
 
-      // If successful, show the success screen and empty the cart
+      setFinalOrderRef(generatedRef);
       setIsPlacingOrder(false);
       setOrderSuccess(true);
       localStorage.removeItem("saucy_cart");
@@ -99,9 +98,9 @@ function Checkout() {
         <div className="mx-auto max-w-5xl w-full">
           
           {orderSuccess ? (
-            <Card className="border-border/60 shadow-lg max-w-lg mx-auto text-center overflow-hidden">
+            <Card className="border-border/60 shadow-lg max-w-lg mx-auto text-center overflow-hidden animate-in fade-in zoom-in duration-500">
               <div className="bg-green-500 p-8 flex justify-center">
-                <CheckCircle className="h-20 w-20 text-white animate-in zoom-in duration-500" />
+                <CheckCircle className="h-20 w-20 text-white" />
               </div>
               <CardContent className="p-8 space-y-6">
                 <div>
@@ -112,15 +111,22 @@ function Checkout() {
                 <div className="bg-secondary/30 rounded-xl p-4 mb-6">
                   <p className="text-sm font-medium text-muted-foreground mb-1">Order Reference</p>
                   <p className="text-xl font-bold tracking-widest text-primary">
-                    #PS-{Math.floor(1000 + Math.random() * 9000)}
+                    #{finalOrderRef}
                   </p>
                 </div>
 
-                <Link to="/" className="block">
-                  <Button size="lg" className="w-full gap-2 text-base font-bold rounded-xl shadow-md">
-                    Return to Menu
-                  </Button>
-                </Link>
+                <div className="space-y-3">
+                  <Link to="/" className="block">
+                    <Button size="lg" className="w-full gap-2 text-base font-bold rounded-xl shadow-md">
+                      Return to Menu
+                    </Button>
+                  </Link>
+                  <Link to="/track" className="block">
+                    <Button size="lg" variant="outline" className="w-full gap-2 text-base font-bold rounded-xl shadow-sm border-2">
+                      <Search className="h-5 w-5" /> Track My Order
+                    </Button>
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           ) : (

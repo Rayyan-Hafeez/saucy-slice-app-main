@@ -172,6 +172,7 @@ function Index() {
           <nav className="flex items-center gap-3">
             <a href="#deals" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Deals</a>
             <a href="#menu-section" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Menu</a>
+            <Link to="/track" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Track Order</Link>
             
             <Button variant="ghost" size="icon" className="shrink-0 relative" onClick={() => setIsCartOpen(true)}>
               <ShoppingBag className="h-5 w-5" />

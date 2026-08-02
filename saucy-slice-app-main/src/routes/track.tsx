@@ -10,7 +10,7 @@ export const Route = createFileRoute("/track")({
 });
 
 function TrackOrder() {
-  const [phone, setPhone] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -18,16 +18,19 @@ function TrackOrder() {
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone) return;
+    if (!searchQuery) return;
     
     setLoading(true);
     setSearched(true);
     
-    // Fetch the most recent order for this phone number
+    // Clean up the input in case they type "#PS-1234" instead of "PS-1234"
+    const cleanQuery = searchQuery.replace('#', '').trim();
+    
+    // Search by Phone OR Order Reference
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .eq('customer_phone', phone)
+      .or(`customer_phone.eq.${cleanQuery},order_ref.eq.${cleanQuery}`)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -42,7 +45,6 @@ function TrackOrder() {
     setLoading(false);
   };
 
-  // Helper function to figure out how far along the progress bar should be
   const getStep = (status: string) => {
     if (status === 'Pending') return 1;
     if (status === 'Preparing') return 2;
@@ -55,7 +57,6 @@ function TrackOrder() {
 
   return (
     <div className="min-h-screen bg-secondary/20 flex flex-col">
-      {/* Header */}
       <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
           <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -76,16 +77,15 @@ function TrackOrder() {
           
           <div className="text-center">
             <h1 className="text-3xl font-bold text-foreground">Track Your Order</h1>
-            <p className="text-muted-foreground mt-2">Enter your phone number to see live updates.</p>
+            <p className="text-muted-foreground mt-2">Enter your phone number or Order Reference.</p>
           </div>
 
-          {/* Search Form */}
           <form onSubmit={handleTrack} className="flex gap-2">
             <input 
-              type="tel"
-              placeholder="e.g., 0300 1234567"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              type="text"
+              placeholder="e.g., 0300 1234567 or PS-4873"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
               required
             />
@@ -94,58 +94,46 @@ function TrackOrder() {
             </Button>
           </form>
 
-          {/* No Order Found Message */}
           {searched && !loading && !order && (
             <div className="text-center p-6 bg-background rounded-xl border border-border/50 text-muted-foreground">
-              We couldn't find an active order for this phone number.
+              We couldn't find an active order matching that search.
             </div>
           )}
 
-          {/* Order Status Card */}
           {order && (
             <Card className="border-border/60 shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="bg-primary/10 p-4 border-b border-border/50 flex justify-between items-center">
-                <span className="font-bold text-foreground">Current Status</span>
+                <span className="font-bold text-foreground">
+                  Order {order.order_ref ? `#${order.order_ref}` : ''}
+                </span>
                 <span className="text-xs font-bold bg-primary text-primary-foreground px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
                   {order.status}
                 </span>
               </div>
               
               <CardContent className="p-6 space-y-8 bg-background">
-                
-                {/* Visual Progress Stepper */}
                 <div className="relative flex justify-between px-2">
-                  {/* Gray background track line */}
                   <div className="absolute top-1/2 left-0 w-full h-1 bg-secondary -z-10 -translate-y-1/2 rounded-full"></div>
-                  
-                  {/* Colored progress line */}
                   <div 
                     className="absolute top-1/2 left-0 h-1 bg-primary -z-10 -translate-y-1/2 rounded-full transition-all duration-700 ease-in-out"
                     style={{ width: `${((step - 1) / 3) * 100}%` }}
                   ></div>
 
-                  {/* Icon 1: Pending */}
                   <div className="flex flex-col items-center gap-2">
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 1 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
                       <Pizza className="h-4 w-4" />
                     </div>
                   </div>
-                  
-                  {/* Icon 2: Preparing */}
                   <div className="flex flex-col items-center gap-2">
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 2 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
                       <ChefHat className="h-4 w-4" />
                     </div>
                   </div>
-
-                  {/* Icon 3: Delivering */}
                   <div className="flex flex-col items-center gap-2">
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 3 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
                       <Bike className="h-4 w-4" />
                     </div>
                   </div>
-
-                  {/* Icon 4: Done */}
                   <div className="flex flex-col items-center gap-2">
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 4 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
                       <CheckCircle className="h-4 w-4" />
@@ -160,12 +148,10 @@ function TrackOrder() {
                   <span>Done</span>
                 </div>
 
-                {/* Order Summary */}
                 <div className="bg-secondary/30 p-4 rounded-xl border border-border/50">
                   <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Your Items</p>
                   <p className="font-medium text-foreground text-sm">{order.order_details}</p>
                 </div>
-
               </CardContent>
             </Card>
           )}
