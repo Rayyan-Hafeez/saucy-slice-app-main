@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Search, ChevronLeft, Pizza, ChefHat, Bike, CheckCircle } from "lucide-react";
+import { Search, ChevronLeft, Pizza, ChefHat, Bike, CheckCircle, Star } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,6 +18,7 @@ type Order = {
   status: string;
   order_details: string;
   total_price: number;
+  rating: number | null; // NEW: Added rating to our Order type
 };
 
 function TrackOrder() {
@@ -25,6 +26,10 @@ function TrackOrder() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // NEW: Rating states
+  const [hoveredStar, setHoveredStar] = useState(0);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,11 +42,9 @@ function TrackOrder() {
     const rawSearch = searchQuery.trim();
     const upperSearch = rawSearch.toUpperCase();
     
-    // Create both variations so it matches no matter how the customer types it
     const numberOnly = upperSearch.replace(/^PS-/, "");
     const withPrefix = `PS-${numberOnly}`;
 
-    // Search database for the exact number, prefixed number, or phone number
     const { data, error: searchError } = await supabase
       .from("orders")
       .select("*")
@@ -58,10 +61,29 @@ function TrackOrder() {
     setLoading(false);
   };
 
-  // If the database says "Archived", we tell the UI it is "Delivered"
+  // NEW: Function to submit the rating to Supabase
+  const submitRating = async (ratingValue: number) => {
+    if (!order || order.rating) return;
+    
+    setIsSubmittingRating(true);
+    
+    const { error } = await supabase
+      .from('orders')
+      .update({ rating: ratingValue })
+      .eq('id', order.id);
+      
+    if (!error) {
+      // Update the local state so the UI shows the filled stars instantly
+      setOrder({ ...order, rating: ratingValue });
+    } else {
+      alert("Failed to submit rating. Please try again.");
+    }
+    
+    setIsSubmittingRating(false);
+  };
+
   const displayStatus = order?.status === "Archived" ? "Delivered" : order?.status;
 
-  // Determine which steps are active based on the displayStatus
   const getStepStatus = (stepName: string) => {
     const statuses = ["Pending", "Preparing", "Out for Delivery", "Delivered"];
     const currentIndex = statuses.indexOf(displayStatus || "Pending");
@@ -87,7 +109,7 @@ function TrackOrder() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center pt-12 px-4">
+      <main className="flex-1 flex flex-col items-center pt-12 px-4 pb-12">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Track Your Order</h1>
           <p className="text-muted-foreground">Enter your phone number or Order Reference.</p>
@@ -121,10 +143,8 @@ function TrackOrder() {
 
             <CardContent className="p-6">
               <div className="flex justify-between mb-10 relative px-2">
-                {/* Progress Bar Line Background */}
                 <div className="absolute top-5 left-6 right-6 h-0.5 bg-secondary -z-10" />
 
-                {/* Step 1: Pending */}
                 <div className="flex flex-col items-center bg-background px-1">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Pending") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
                     <Pizza className="w-5 h-5" />
@@ -132,7 +152,6 @@ function TrackOrder() {
                   <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Pending</span>
                 </div>
 
-                {/* Step 2: Preparing */}
                 <div className="flex flex-col items-center bg-background px-1">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Preparing") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
                     <ChefHat className="w-5 h-5" />
@@ -140,7 +159,6 @@ function TrackOrder() {
                   <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Preparing</span>
                 </div>
 
-                {/* Step 3: Delivering */}
                 <div className="flex flex-col items-center bg-background px-1">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Out for Delivery") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
                     <Bike className="w-5 h-5" />
@@ -148,7 +166,6 @@ function TrackOrder() {
                   <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Delivering</span>
                 </div>
 
-                {/* Step 4: Done */}
                 <div className="flex flex-col items-center bg-background px-1">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Delivered") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
                     <CheckCircle className="w-5 h-5" />
@@ -161,6 +178,35 @@ function TrackOrder() {
                 <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">Your Items</p>
                 <p className="font-medium text-foreground whitespace-pre-wrap">{order.order_details}</p>
               </div>
+
+              {/* NEW: 5-Star Rating UI (Only shows when order is Delivered or Archived) */}
+              {displayStatus === "Delivered" && (
+                <div className="mt-6 pt-6 border-t border-border/50 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <h4 className="font-bold text-foreground mb-4">
+                    {order.rating ? "Thanks for your feedback!" : "How was your food?"}
+                  </h4>
+                  <div className="flex justify-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        disabled={!!order.rating || isSubmittingRating}
+                        onClick={() => submitRating(star)}
+                        onMouseEnter={() => setHoveredStar(star)}
+                        onMouseLeave={() => setHoveredStar(0)}
+                        className="transition-transform hover:scale-110 disabled:hover:scale-100 p-1"
+                      >
+                        <Star
+                          className={`w-8 h-8 ${
+                            (order.rating ? star <= order.rating : star <= hoveredStar)
+                              ? "fill-amber-400 text-amber-400 drop-shadow-sm"
+                              : "text-muted-foreground opacity-30"
+                          } transition-all duration-200`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
