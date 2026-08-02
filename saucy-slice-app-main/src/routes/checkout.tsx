@@ -365,7 +365,7 @@ function Checkout() {
                   disabled={isSubmitting}
                   className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-transform active:scale-[0.98] mt-6"
                 >
-                  {isSubmitting ? "Processing..." : "Place Order (Cash on Delivery)"}
+                  {isSubmitting ? "Processing..." : "Place Order"}
                 </Button>
               </CardContent>
             </Card>
