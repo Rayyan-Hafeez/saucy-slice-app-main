@@ -34,17 +34,18 @@ function TrackOrder() {
     setError("");
     setOrder(null);
 
-    // Clean up the search query (allow searching with or without "PS-")
-    let formattedQuery = searchQuery.trim().toUpperCase();
-    if (formattedQuery.startsWith("PS-")) {
-      formattedQuery = formattedQuery.substring(3);
-    }
+    const rawSearch = searchQuery.trim();
+    const upperSearch = rawSearch.toUpperCase();
+    
+    // Create both variations so it matches no matter how the customer types it
+    const numberOnly = upperSearch.replace(/^PS-/, "");
+    const withPrefix = `PS-${numberOnly}`;
 
-    // FIXED: Renamed the Supabase error to 'searchError' so it doesn't conflict with our state
+    // Search database for the exact number, prefixed number, or phone number
     const { data, error: searchError } = await supabase
       .from("orders")
       .select("*")
-      .or(`order_ref.eq.${formattedQuery},customer_phone.eq.${searchQuery.trim()}`)
+      .or(`order_ref.eq.${numberOnly},order_ref.eq.${withPrefix},customer_phone.eq.${rawSearch}`)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -95,7 +96,7 @@ function TrackOrder() {
         <form onSubmit={handleSearch} className="w-full max-w-md flex gap-2 mb-8">
           <Input
             type="text"
-            placeholder="PS-9045 or Phone Number"
+            placeholder="PS-2420 or Phone Number"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-background h-12 rounded-xl"
@@ -110,7 +111,9 @@ function TrackOrder() {
         {order && (
           <Card className="w-full max-w-md border-border/60 shadow-lg bg-background overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-4 border-b border-border/50 flex justify-between items-center bg-primary/5">
-              <h3 className="font-bold text-lg text-foreground">Order #{order.order_ref || order.id.split('-')[0].toUpperCase()}</h3>
+              <h3 className="font-bold text-lg text-foreground">
+                Order {order.order_ref?.startsWith('PS-') ? '' : '#'}{order.order_ref || order.id.split('-')[0].toUpperCase()}
+              </h3>
               <Badge className="bg-primary text-primary-foreground uppercase tracking-wider font-bold">
                 {displayStatus}
               </Badge>
