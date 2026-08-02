@@ -79,6 +79,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Pizza Saucy" },
       { property: "og:description", content: "Hot, Fresh & Saucy Pizza Delivery" },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://pizza-saucy-theta.vercel.app/preview.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@PizzaSaucy" },
     ],
