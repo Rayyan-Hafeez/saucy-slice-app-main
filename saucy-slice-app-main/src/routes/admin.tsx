@@ -198,21 +198,16 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
-  // WHATSAPP INTEGRATION
+  // UPGRADED WHATSAPP INTEGRATION (NATIVE URL)
   // ----------------------------------------------------------------
-  const openWhatsApp = (order: Order) => {
-    // Strips all spaces or dashes from the phone number
+  const getWhatsAppLink = (order: Order) => {
     let phone = order.customer_phone.replace(/\D/g, '');
-    
-    // Automatically convert local 03xx numbers to +92 format for WhatsApp API
     if (phone.startsWith('0')) {
       phone = '92' + phone.substring(1);
     }
-
     const orderNum = order.order_ref || order.id.split('-')[0].toUpperCase();
     const message = encodeURIComponent(`Hi ${order.customer_name}, this is Pizza Saucy! 🍕 We are reaching out regarding your Order #${orderNum}.`);
-    
-    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+    return `https://wa.me/${phone}?text=${message}`;
   };
 
   // ----------------------------------------------------------------
@@ -444,13 +439,19 @@ function AdminDashboard() {
                           </Button>
                         )}
                         
-                        {/* NEW: WhatsApp Integration Button */}
+                        {/* FIXED: Uses a native HTML anchor tag (100% pop-up blocker proof) wrapped perfectly to look exactly like your Button */}
                         <Button 
-                          onClick={() => openWhatsApp(order)} 
                           variant="outline" 
-                          className="col-span-2 bg-[#25D366]/10 text-[#25D366] border-[#25D366]/50 hover:bg-[#25D366]/20 transition-colors"
+                          className="col-span-2 bg-[#25D366]/10 text-[#25D366] border-[#25D366]/50 hover:bg-[#25D366]/20 transition-colors p-0 overflow-hidden"
                         >
-                          <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp Customer
+                          <a 
+                            href={getWhatsAppLink(order)} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="w-full h-full flex items-center justify-center px-4 py-2"
+                          >
+                            <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp Customer
+                          </a>
                         </Button>
 
                         <Button onClick={() => printReceipt(order)} variant="outline" className="w-full text-slate-700 border-slate-300 hover:bg-slate-100">
