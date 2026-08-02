@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy } from "lucide-react";
+import { ChefHat, Bike, CheckCircle, Store, Archive, Lock, KeyRound, BarChart3, ListOrdered, CalendarDays, DollarSign, Activity, Trophy, RotateCcw, Clock } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
@@ -25,14 +25,27 @@ function formatPrice(value: number) {
   return `Rs. ${value.toLocaleString("en-PK")}`;
 }
 
+// Helper to format timestamps nicely (e.g., Aug 2, 2026, 10:45 PM)
+function formatDate(isoString: string) {
+  const date = new Date(isoString);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 function AdminDashboard() {
   // Security State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState("");
   const SECRET_PIN = "1234";
 
-  // Dashboard Navigation State
-  const [activeTab, setActiveTab] = useState<'queue' | 'analytics'>('queue');
+  // Dashboard Navigation State ('queue' | 'archive' | 'analytics')
+  const [activeTab, setActiveTab] = useState<'queue' | 'archive' | 'analytics'>('queue');
 
   // Order & Audio State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -87,11 +100,15 @@ function AdminDashboard() {
     if (error) alert("Failed to update status.");
   }
 
-  // Changed from Delete to Archive
   async function archiveOrder(id: string) {
-    if (!confirm("Archive this order? It will clear from the queue but stay in your analytics.")) return;
+    if (!confirm("Archive this order? It will move to the Archive section.")) return;
     const { error } = await supabase.from('orders').update({ status: 'Archived' }).eq('id', id);
     if (error) alert("Failed to archive order.");
+  }
+
+  async function restoreOrder(id: string) {
+    const { error } = await supabase.from('orders').update({ status: 'Delivered' }).eq('id', id);
+    if (error) alert("Failed to restore order.");
   }
 
   const handleLogin = (e: React.FormEvent) => {
@@ -105,11 +122,11 @@ function AdminDashboard() {
   };
 
   // ----------------------------------------------------------------
-  // DATA CALCULATIONS
+  // DATA CALCULATIONS & FILTERING
   // ----------------------------------------------------------------
   
-  // Filter out archived orders for the Live Queue
   const activeOrders = orders.filter(o => o.status !== 'Archived');
+  const archivedOrders = orders.filter(o => o.status === 'Archived');
 
   // Analytics Metrics
   const now = new Date();
@@ -131,11 +148,10 @@ function AdminDashboard() {
   const deliveringCount = activeOrders.filter(o => o.status === 'Out for Delivery').length;
   const deliveredCount = activeOrders.filter(o => o.status === 'Delivered').length;
 
-  // Calculate the most selling product
+  // Best Seller calculation
   const bestSeller = (() => {
     const itemCounts: Record<string, number> = {};
     orders.forEach(order => {
-      // Split the order details by comma (e.g., "2x Deal No. 1, 1x Zinger")
       const items = order.order_details.split(', ');
       items.forEach(itemStr => {
         const match = itemStr.match(/^(\d+)x\s+(.+)$/);
@@ -205,7 +221,7 @@ function AdminDashboard() {
   }
 
   // ----------------------------------------------------------------
-  // VIEW 2: THE SECURE LIVE DASHBOARD
+  // VIEW 2: THE SECURE DASHBOARD WITH TABS
   // ----------------------------------------------------------------
   return (
     <div className="min-h-screen bg-secondary/20 pb-10">
@@ -216,23 +232,30 @@ function AdminDashboard() {
             <span className="hidden sm:inline text-lg font-bold tracking-tight">Pizza Saucy | Live Kitchen</span>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* MANAGER NAVIGATION TABS */}
             <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
               <button 
                 onClick={() => setActiveTab('queue')} 
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'queue' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'queue' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
               >
                 <ListOrdered className="w-4 h-4" /> Queue
               </button>
               <button 
+                onClick={() => setActiveTab('archive')} 
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'archive' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
+              >
+                <Archive className="w-4 h-4" /> Archive
+              </button>
+              <button 
                 onClick={() => setActiveTab('analytics')} 
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'analytics' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'}`}
               >
                 <BarChart3 className="w-4 h-4" /> Analytics
               </button>
             </div>
 
-            <Button variant="ghost" size="sm" onClick={() => setIsAuthenticated(false)} className="text-slate-300 hover:text-white">
+            <Button variant="ghost" size="sm" onClick={() => setIsAuthenticated(false)} className="text-slate-300 hover:text-white text-xs sm:text-sm">
               Lock
             </Button>
           </div>
@@ -286,8 +309,13 @@ function AdminDashboard() {
 
                     <CardContent className="p-5 flex-1 flex flex-col bg-background">
                       <div className="mb-4">
-                        <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
-                        <p className="text-sm font-medium text-primary">{order.customer_phone}</p>
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
+                            <Clock className="w-3 h-3" /> {formatDate(order.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
                         <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
                           {order.customer_address}
                         </p>
@@ -319,7 +347,6 @@ function AdminDashboard() {
                           </Button>
                         )}
                         
-                        {/* New Archive Button */}
                         <Button onClick={() => archiveOrder(order.id)} variant="outline" className="col-span-2 text-slate-500 hover:text-slate-600 hover:bg-slate-100 mt-2 border-slate-200">
                           <Archive className="mr-2 h-4 w-4" /> Archive Record
                         </Button>
@@ -333,7 +360,77 @@ function AdminDashboard() {
         )}
 
         {/* =========================================
-            TAB 2: ANALYTICS DASHBOARD
+            TAB 2: ARCHIVE SECTION
+            ========================================= */}
+        {activeTab === 'archive' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex justify-between items-end">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">Archived Orders</h1>
+                <p className="text-muted-foreground mt-1">Past completed orders sorted by date and time.</p>
+              </div>
+              <div className="bg-slate-800 text-slate-200 px-4 py-2 rounded-lg font-bold">
+                {archivedOrders.length} Archived
+              </div>
+            </div>
+
+            {archivedOrders.length === 0 ? (
+              <div className="text-center py-20 bg-background rounded-xl border border-border/50">
+                <Archive className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <h2 className="text-xl font-semibold text-muted-foreground">No archived orders yet.</h2>
+                <p className="text-sm text-muted-foreground">Orders you archive from the queue will appear here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {archivedOrders.map((order) => (
+                  <Card key={order.id} className="border-border/60 shadow-sm overflow-hidden flex flex-col bg-background/60">
+                    <div className="p-4 border-b bg-slate-700 text-white flex justify-between items-center">
+                      <span className="font-bold text-sm tracking-wider">
+                        {order.order_ref ? `#${order.order_ref}` : `#${order.id.split('-')[0].toUpperCase()}`}
+                      </span>
+                      <span className="font-bold bg-white/20 px-2 py-1 rounded text-xs backdrop-blur-sm">
+                        ARCHIVED
+                      </span>
+                    </div>
+
+                    <CardContent className="p-5 flex-1 flex flex-col">
+                      <div className="mb-4">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-bold text-lg text-foreground">{order.customer_name}</h3>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
+                            <Clock className="w-3 h-3" /> {formatDate(order.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-primary mt-1">{order.customer_phone}</p>
+                        <p className="text-sm text-muted-foreground mt-1 bg-secondary/50 p-2 rounded-md">
+                          {order.customer_address}
+                        </p>
+                      </div>
+
+                      <div className="mb-6 flex-1">
+                        <p className="text-sm font-medium text-muted-foreground mb-1">Items:</p>
+                        <p className="font-medium text-foreground">{order.order_details}</p>
+                        <div className="mt-3 pt-3 border-t border-border/50 flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Total Collected:</span>
+                          <span className="text-lg font-bold text-foreground">{formatPrice(order.total_price)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-auto pt-2">
+                        <Button onClick={() => restoreOrder(order.id)} variant="outline" className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
+                          <RotateCcw className="mr-2 h-4 w-4" /> Restore to Queue
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================
+            TAB 3: ANALYTICS DASHBOARD
             ========================================= */}
         {activeTab === 'analytics' && (
           <div className="space-y-6 animate-in fade-in duration-300">
