@@ -1,161 +1,166 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { ChevronLeft, Search, Pizza, ChefHat, Bike, CheckCircle, Loader2 } from "lucide-react";
+import { Search, ChevronLeft, Pizza, ChefHat, Bike, CheckCircle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/track")({
   component: TrackOrder,
 });
 
+type Order = {
+  id: string;
+  order_ref: string;
+  status: string;
+  order_details: string;
+  total_price: number;
+};
+
 function TrackOrder() {
   const [searchQuery, setSearchQuery] = useState("");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleTrack = async (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery) return;
-    
+    if (!searchQuery.trim()) return;
+
     setLoading(true);
-    setSearched(true);
-    
-    // Clean up the input in case they type "#PS-1234" instead of "PS-1234"
-    const cleanQuery = searchQuery.replace('#', '').trim();
-    
-    // Search by Phone OR Order Reference
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .or(`customer_phone.eq.${cleanQuery},order_ref.eq.${cleanQuery}`)
+    setError("");
+    setOrder(null);
+
+    // Clean up the search query (allow searching with or without "PS-")
+    let formattedQuery = searchQuery.trim().toUpperCase();
+    if (formattedQuery.startsWith("PS-")) {
+      formattedQuery = formattedQuery.substring(3);
+    }
+
+    // FIXED: Renamed the Supabase error to 'searchError' so it doesn't conflict with our state
+    const { data, error: searchError } = await supabase
+      .from("orders")
+      .select("*")
+      .or(`order_ref.eq.${formattedQuery},customer_phone.eq.${searchQuery.trim()}`)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle();
-      
-    if (data) {
-      setOrder(data);
+      .single();
+
+    if (searchError || !data) {
+      setError("Order not found. Please check your reference number or phone number.");
     } else {
-      setOrder(null);
+      setOrder(data);
     }
-    
-    if (error) console.error(error);
     setLoading(false);
   };
 
-  const getStep = (status: string) => {
-    if (status === 'Pending') return 1;
-    if (status === 'Preparing') return 2;
-    if (status === 'Out for Delivery') return 3;
-    if (status === 'Delivered') return 4;
-    return 0;
-  };
+  // If the database says "Archived", we tell the UI it is "Delivered"
+  const displayStatus = order?.status === "Archived" ? "Delivered" : order?.status;
 
-  const step = order ? getStep(order.status) : 0;
+  // Determine which steps are active based on the displayStatus
+  const getStepStatus = (stepName: string) => {
+    const statuses = ["Pending", "Preparing", "Out for Delivery", "Delivered"];
+    const currentIndex = statuses.indexOf(displayStatus || "Pending");
+    const stepIndex = statuses.indexOf(stepName);
+
+    if (currentIndex >= stepIndex) return "active";
+    return "inactive";
+  };
 
   return (
     <div className="min-h-screen bg-secondary/20 flex flex-col">
-      <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronLeft className="h-5 w-5" />
-            <span className="font-medium">Back to Menu</span>
+      <header className="w-full bg-background border-b border-border/50 p-4">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <Link to="/" className="flex items-center text-muted-foreground hover:text-foreground transition-colors text-sm font-medium">
+            <ChevronLeft className="w-4 h-4 mr-1" /> Back to Menu
           </Link>
           <div className="flex items-center gap-2">
             <div className="grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground">
               <Pizza className="h-4 w-4" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-foreground">Pizza Saucy</span>
+            <span className="font-bold text-foreground text-lg">Pizza Saucy</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 py-10 px-4 sm:px-6 flex flex-col items-center">
-        <div className="w-full max-w-md space-y-8">
-          
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-foreground">Track Your Order</h1>
-            <p className="text-muted-foreground mt-2">Enter your phone number or Order Reference.</p>
-          </div>
-
-          <form onSubmit={handleTrack} className="flex gap-2">
-            <input 
-              type="text"
-              placeholder="e.g., 0300 1234567 or PS-4873"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-4 py-2 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
-              required
-            />
-            <Button type="submit" disabled={loading} className="rounded-xl px-6 bg-primary text-primary-foreground hover:bg-primary/90">
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-            </Button>
-          </form>
-
-          {searched && !loading && !order && (
-            <div className="text-center p-6 bg-background rounded-xl border border-border/50 text-muted-foreground">
-              We couldn't find an active order matching that search.
-            </div>
-          )}
-
-          {order && (
-            <Card className="border-border/60 shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-primary/10 p-4 border-b border-border/50 flex justify-between items-center">
-                <span className="font-bold text-foreground">
-                  Order {order.order_ref ? `#${order.order_ref}` : ''}
-                </span>
-                <span className="text-xs font-bold bg-primary text-primary-foreground px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                  {order.status}
-                </span>
-              </div>
-              
-              <CardContent className="p-6 space-y-8 bg-background">
-                <div className="relative flex justify-between px-2">
-                  <div className="absolute top-1/2 left-0 w-full h-1 bg-secondary -z-10 -translate-y-1/2 rounded-full"></div>
-                  <div 
-                    className="absolute top-1/2 left-0 h-1 bg-primary -z-10 -translate-y-1/2 rounded-full transition-all duration-700 ease-in-out"
-                    style={{ width: `${((step - 1) / 3) * 100}%` }}
-                  ></div>
-
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 1 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
-                      <Pizza className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 2 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
-                      <ChefHat className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 3 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
-                      <Bike className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-4 transition-colors duration-500 ${step >= 4 ? 'bg-primary border-primary text-primary-foreground shadow-md' : 'bg-background border-secondary text-muted-foreground'}`}>
-                      <CheckCircle className="h-4 w-4" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between px-1 text-xs font-medium text-muted-foreground">
-                  <span>Pending</span>
-                  <span>Preparing</span>
-                  <span>Delivering</span>
-                  <span>Done</span>
-                </div>
-
-                <div className="bg-secondary/30 p-4 rounded-xl border border-border/50">
-                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Your Items</p>
-                  <p className="font-medium text-foreground text-sm">{order.order_details}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+      <main className="flex-1 flex flex-col items-center pt-12 px-4">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Track Your Order</h1>
+          <p className="text-muted-foreground">Enter your phone number or Order Reference.</p>
         </div>
+
+        <form onSubmit={handleSearch} className="w-full max-w-md flex gap-2 mb-8">
+          <Input
+            type="text"
+            placeholder="PS-9045 or Phone Number"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-background h-12 rounded-xl"
+          />
+          <Button type="submit" className="bg-primary hover:bg-primary/90 h-12 w-12 rounded-xl shrink-0" disabled={loading}>
+            <Search className="w-5 h-5" />
+          </Button>
+        </form>
+
+        {error && <p className="text-destructive mb-4 font-medium">{error}</p>}
+
+        {order && (
+          <Card className="w-full max-w-md border-border/60 shadow-lg bg-background overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div className="p-4 border-b border-border/50 flex justify-between items-center bg-primary/5">
+              <h3 className="font-bold text-lg text-foreground">Order #{order.order_ref || order.id.split('-')[0].toUpperCase()}</h3>
+              <Badge className="bg-primary text-primary-foreground uppercase tracking-wider font-bold">
+                {displayStatus}
+              </Badge>
+            </div>
+
+            <CardContent className="p-6">
+              <div className="flex justify-between mb-10 relative px-2">
+                {/* Progress Bar Line Background */}
+                <div className="absolute top-5 left-6 right-6 h-0.5 bg-secondary -z-10" />
+
+                {/* Step 1: Pending */}
+                <div className="flex flex-col items-center bg-background px-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Pending") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
+                    <Pizza className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Pending</span>
+                </div>
+
+                {/* Step 2: Preparing */}
+                <div className="flex flex-col items-center bg-background px-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Preparing") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
+                    <ChefHat className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Preparing</span>
+                </div>
+
+                {/* Step 3: Delivering */}
+                <div className="flex flex-col items-center bg-background px-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Out for Delivery") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
+                    <Bike className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Delivering</span>
+                </div>
+
+                {/* Step 4: Done */}
+                <div className="flex flex-col items-center bg-background px-1">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-colors ${getStepStatus("Delivered") === "active" ? "bg-primary text-primary-foreground shadow-md" : "bg-secondary text-muted-foreground"}`}>
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">Done</span>
+                </div>
+              </div>
+
+              <div className="bg-secondary/30 p-4 rounded-xl border border-border/50">
+                <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">Your Items</p>
+                <p className="font-medium text-foreground whitespace-pre-wrap">{order.order_details}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );
