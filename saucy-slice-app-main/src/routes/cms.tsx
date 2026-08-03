@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { ChevronLeft, Pizza, Plus, Trash2, Tag, Edit3, Settings } from "lucide-react";
+import { ChevronLeft, Pizza, Plus, Trash2, Tag, Edit3, Settings, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ type MenuItem = {
   name: string;
   description: string;
   price: number;
-  badge: string;
+  badge: string | null;
   is_active: boolean;
 };
 
@@ -40,6 +40,7 @@ function MenuCMS() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form State
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -65,12 +66,33 @@ function MenuCMS() {
     setLoading(false);
   }
 
-  async function handleAddItem(e: React.FormEvent) {
+  const resetForm = () => {
+    setEditingId(null);
+    setCategory(CATEGORIES[0]);
+    setName("");
+    setDescription("");
+    setPrice("");
+    setBadge("");
+  };
+
+  function handleEditClick(item: MenuItem) {
+    setEditingId(item.id);
+    setCategory(item.category);
+    setName(item.name);
+    setDescription(item.description || "");
+    setPrice(item.price.toString());
+    setBadge(item.badge || "");
+    
+    // Smooth scroll to top for smaller screens
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleSaveItem(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !price) return;
     setIsSubmitting(true);
 
-    const newItem = {
+    const itemData = {
       category,
       name,
       description,
@@ -79,16 +101,31 @@ function MenuCMS() {
       is_active: true,
     };
 
-    const { error } = await supabase.from("menu_items").insert([newItem]);
+    if (editingId) {
+      // Update existing item
+      const { error } = await supabase
+        .from("menu_items")
+        .update(itemData)
+        .eq("id", editingId);
 
-    if (error) {
-      alert("Error adding item: " + error.message);
+      if (error) {
+        alert("Error updating item: " + error.message);
+      } else {
+        resetForm();
+        fetchItems(); // Refresh list
+      }
     } else {
-      setName("");
-      setDescription("");
-      setPrice("");
-      setBadge("");
-      fetchItems(); // Refresh list
+      // Insert new item
+      const { error } = await supabase
+        .from("menu_items")
+        .insert([itemData]);
+
+      if (error) {
+        alert("Error adding item: " + error.message);
+      } else {
+        resetForm();
+        fetchItems(); // Refresh list
+      }
     }
     setIsSubmitting(false);
   }
@@ -118,16 +155,22 @@ function MenuCMS() {
 
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         
-        {/* ADD NEW ITEM FORM */}
+        {/* ADD / EDIT ITEM FORM */}
         <div className="lg:col-span-1 lg:sticky lg:top-24">
-          <Card className="border-border/60 shadow-lg bg-background rounded-3xl overflow-hidden">
-            <CardHeader className="bg-secondary/40 border-b border-border/50 pb-4">
+          <Card className={`border-border/60 shadow-lg bg-background rounded-3xl overflow-hidden transition-all duration-300 ${editingId ? 'ring-2 ring-primary' : ''}`}>
+            <CardHeader className="bg-secondary/40 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
               <CardTitle className="text-xl font-black text-foreground flex items-center gap-2">
-                <Plus className="w-5 h-5 text-primary" /> Add Menu Item
+                {editingId ? <Edit3 className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
+                {editingId ? "Edit Menu Item" : "Add Menu Item"}
               </CardTitle>
+              {editingId && (
+                <Button variant="ghost" size="sm" onClick={resetForm} className="h-8 px-2 text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4 mr-1" /> Cancel
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-6">
-              <form onSubmit={handleAddItem} className="space-y-4">
+              <form onSubmit={handleSaveItem} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Category</label>
                   <Select value={category} onValueChange={setCategory}>
@@ -189,9 +232,9 @@ function MenuCMS() {
                 <Button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="w-full h-12 mt-2 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-md"
+                  className="w-full h-12 mt-2 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-md transition-all"
                 >
-                  {isSubmitting ? "Saving..." : "Save to Menu"}
+                  {isSubmitting ? "Saving..." : (editingId ? "Update Item" : "Save to Menu")}
                 </Button>
               </form>
             </CardContent>
@@ -228,7 +271,7 @@ function MenuCMS() {
                     <h3 className="text-lg font-bold text-slate-800 border-b border-border/60 pb-2">{cat}</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {categoryItems.map((item) => (
-                        <Card key={item.id} className="relative overflow-hidden border-border/60 shadow-sm bg-white rounded-2xl group">
+                        <Card key={item.id} className={`relative overflow-hidden border-border/60 shadow-sm bg-white rounded-2xl group transition-all ${editingId === item.id ? 'ring-2 ring-primary/50' : ''}`}>
                           {item.badge && (
                             <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-white z-10 text-[10px]">
                               {item.badge}
@@ -245,13 +288,22 @@ function MenuCMS() {
                             <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50">
                               <span className="font-black text-primary">{formatPrice(item.price)}</span>
                               
-                              <button 
-                                onClick={() => handleDelete(item.id)}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete Item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  onClick={() => handleEditClick(item)}
+                                  className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                  title="Edit Item"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => handleDelete(item.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
