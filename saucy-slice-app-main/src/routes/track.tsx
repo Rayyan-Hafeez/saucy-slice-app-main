@@ -16,13 +16,14 @@ export const Route = createFileRoute("/track")({
 });
 
 type Order = {
-  id: string | number;
+  id: string;
   customer_name: string;
-  phone: string;
-  address: string;
-  total: number;
-  items: any;
+  customer_phone: string;
+  customer_address: string;
+  total_price: number;
+  order_details: string;
   status: string; // "Pending", "Preparing", "Out for Delivery", "Delivered"
+  order_ref: string;
   created_at: string;
 };
 
@@ -46,11 +47,11 @@ function TrackOrder() {
     // Clean up query (remove '#' if user typed it)
     const cleanQuery = searchQuery.trim().replace("#", "");
 
-    // Search Supabase orders table by ID or Phone number
+    // Search Supabase orders table by order_ref or customer_phone
     const { data, error } = await supabase
       .from("orders")
       .select("*")
-      .or(`id.eq.${cleanQuery},phone.ilike.%${cleanQuery}%`)
+      .or(`order_ref.eq.${cleanQuery},customer_phone.ilike.%${cleanQuery}%`)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -61,18 +62,6 @@ function TrackOrder() {
     }
     setLoading(false);
   }
-
-  // Determine current step index based on status text
-  const getStepStatus = (currentStatus: string, stepName: string) => {
-    const statuses = ["Pending", "Preparing", "Out for Delivery", "Delivered"];
-    const currentIndex = statuses.indexOf(currentStatus);
-    const stepIndex = statuses.indexOf(stepName);
-
-    if (currentIndex === -1) return "upcoming";
-    if (stepIndex < currentIndex) return "completed";
-    if (stepIndex === currentIndex) return "current";
-    return "upcoming";
-  };
 
   const currentOrderStatus = order?.status || "Pending";
 
@@ -107,7 +96,7 @@ function TrackOrder() {
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="e.g. 4216 or 0321..."
+                placeholder="e.g. 6278 or 0321..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-12 bg-white border-border/60 rounded-xl font-medium shadow-sm"
@@ -139,7 +128,7 @@ function TrackOrder() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b border-border/50 gap-4">
                 <div>
                   <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Reference</span>
-                  <h2 className="text-3xl font-black text-primary">#{order.id}</h2>
+                  <h2 className="text-3xl font-black text-primary">#{order.order_ref || order.id.split('-')[0].toUpperCase()}</h2>
                 </div>
                 <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 font-bold px-4 py-1.5 text-sm rounded-full">
                   Status: {currentOrderStatus}
@@ -214,11 +203,11 @@ function TrackOrder() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="w-4 h-4 text-primary shrink-0" />
-                      <span>{order.phone}</span>
+                      <span>{order.customer_phone}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-primary shrink-0" />
-                      <span>{order.address}</span>
+                      <span>{order.customer_address}</span>
                     </div>
                   </div>
                 </div>
@@ -226,20 +215,11 @@ function TrackOrder() {
                 <div className="space-y-3 bg-secondary/20 p-4 rounded-2xl flex flex-col justify-between">
                   <h4 className="font-bold text-foreground text-sm uppercase tracking-wider">Order Breakdown</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    {Array.isArray(order.items) ? (
-                      order.items.map((i: any, idx: number) => (
-                        <div key={idx} className="flex justify-between font-medium text-foreground">
-                          <span>{i.quantity}x {i.name}</span>
-                          <span>{formatPrice(i.price * i.quantity)}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p>Custom Order Package</p>
-                    )}
+                    <p className="font-medium text-foreground">{order.order_details}</p>
                   </div>
                   <div className="flex justify-between items-center pt-3 border-t border-border/50 font-black text-foreground">
                     <span>Total Paid:</span>
-                    <span className="text-primary text-lg">{formatPrice(order.total)}</span>
+                    <span className="text-primary text-lg">{formatPrice(order.total_price)}</span>
                   </div>
                 </div>
               </div>
