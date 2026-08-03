@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { ChevronLeft, Pizza, Plus, Trash2, Tag, Edit3, Settings, X } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Tag, Edit3, Settings, X, Save, LayoutList } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,15 +39,20 @@ function formatPrice(value: number) {
 function MenuCMS() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"edit" | "add">("edit");
+  
+  // State for Add Form
+  const [isAdding, setIsAdding] = useState(false);
+  const [addCategory, setAddCategory] = useState(CATEGORIES[0]);
+  const [addName, setAddName] = useState("");
+  const [addDescription, setAddDescription] = useState("");
+  const [addPrice, setAddPrice] = useState("");
+  const [addBadge, setAddBadge] = useState("");
 
-  // Form State
-  const [category, setCategory] = useState(CATEGORIES[0]);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [badge, setBadge] = useState("");
+  // State for Inline Editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ category: "", name: "", description: "", price: "", badge: "" });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     fetchItems();
@@ -66,70 +71,76 @@ function MenuCMS() {
     setLoading(false);
   }
 
-  const resetForm = () => {
-    setEditingId(null);
-    setCategory(CATEGORIES[0]);
-    setName("");
-    setDescription("");
-    setPrice("");
-    setBadge("");
-  };
-
-  function handleEditClick(item: MenuItem) {
-    setEditingId(item.id);
-    setCategory(item.category);
-    setName(item.name);
-    setDescription(item.description || "");
-    setPrice(item.price.toString());
-    setBadge(item.badge || "");
-    
-    // Smooth scroll to top for smaller screens
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function handleSaveItem(e: React.FormEvent) {
+  // Add Item Logic
+  async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !price) return;
-    setIsSubmitting(true);
+    if (!addName || !addPrice) return;
+    setIsAdding(true);
 
-    const itemData = {
-      category,
-      name,
-      description,
-      price: parseFloat(price),
-      badge: badge.trim() || null,
+    const newItem = {
+      category: addCategory,
+      name: addName,
+      description: addDescription,
+      price: parseFloat(addPrice),
+      badge: addBadge.trim() || null,
       is_active: true,
     };
 
-    if (editingId) {
-      // Update existing item
-      const { error } = await supabase
-        .from("menu_items")
-        .update(itemData)
-        .eq("id", editingId);
+    const { error } = await supabase.from("menu_items").insert([newItem]);
 
-      if (error) {
-        alert("Error updating item: " + error.message);
-      } else {
-        resetForm();
-        fetchItems(); // Refresh list
-      }
+    if (error) {
+      alert("Error adding item: " + error.message);
     } else {
-      // Insert new item
-      const { error } = await supabase
-        .from("menu_items")
-        .insert([itemData]);
-
-      if (error) {
-        alert("Error adding item: " + error.message);
-      } else {
-        resetForm();
-        fetchItems(); // Refresh list
-      }
+      setAddName("");
+      setAddDescription("");
+      setAddPrice("");
+      setAddBadge("");
+      fetchItems();
+      setActiveTab("edit"); // Auto-switch back to view the new item
     }
-    setIsSubmitting(false);
+    setIsAdding(false);
   }
 
+  // Setup Inline Edit Mode
+  function startEditing(item: MenuItem) {
+    setEditingId(item.id);
+    setEditForm({
+      category: item.category,
+      name: item.name,
+      description: item.description || "",
+      price: item.price.toString(),
+      badge: item.badge || ""
+    });
+  }
+
+  // Update Item Logic
+  async function handleUpdateItem(id: string) {
+    if (!editForm.name || !editForm.price) return;
+    setIsUpdating(true);
+
+    const updatedData = {
+      category: editForm.category,
+      name: editForm.name,
+      description: editForm.description,
+      price: parseFloat(editForm.price),
+      badge: editForm.badge.trim() || null,
+    };
+
+    const { error } = await supabase
+      .from("menu_items")
+      .update(updatedData)
+      .eq("id", id);
+
+    if (error) {
+      alert("Error updating item: " + error.message);
+    } else {
+      setEditingId(null);
+      fetchItems();
+    }
+    setIsUpdating(false);
+  }
+
+  // Delete Item Logic
   async function handleDelete(id: string) {
     if (!window.confirm("Are you sure you want to delete this menu item?")) return;
     
@@ -141,180 +152,226 @@ function MenuCMS() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col">
-      <header className="w-full bg-[#1e293b] border-b border-border/50 p-4 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-6xl mx-auto flex justify-between items-center text-white">
-          <Link to="/" className="flex items-center text-slate-300 hover:text-white transition-colors text-sm font-medium">
-            <ChevronLeft className="w-4 h-4 mr-1" /> Back to Store
-          </Link>
+      {/* HEADER SECTION - EXACTLY LIKE ADMIN PANEL */}
+      <header className="w-full bg-[#111827] border-b border-border/10 p-4 sticky top-0 z-10 shadow-md">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-white">
           <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-primary" />
+            <Settings className="h-5 w-5 text-red-500" />
             <span className="font-bold text-lg tracking-wide">Menu CMS Portal</span>
+          </div>
+          
+          <div className="flex items-center gap-2 text-sm font-medium bg-slate-900/50 p-1 rounded-full border border-slate-700">
+            <button
+              onClick={() => { setActiveTab("edit"); setEditingId(null); }}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-colors ${
+                activeTab === "edit" ? "bg-red-500 text-white shadow-md" : "text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              <LayoutList className="w-4 h-4" /> Manage & Edit
+            </button>
+            <button
+              onClick={() => { setActiveTab("add"); setEditingId(null); }}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-colors ${
+                activeTab === "add" ? "bg-red-500 text-white shadow-md" : "text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              <Plus className="w-4 h-4" /> Add New Item
+            </button>
+            <div className="w-px h-5 bg-slate-700 mx-1"></div>
+            <Link to="/" className="text-slate-400 hover:text-white transition-colors px-3 py-1.5 flex items-center gap-1">
+              <ChevronLeft className="w-4 h-4" /> Store
+            </Link>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         
-        {/* ADD / EDIT ITEM FORM */}
-        <div className="lg:col-span-1 lg:sticky lg:top-24">
-          <Card className={`border-border/60 shadow-lg bg-background rounded-3xl overflow-hidden transition-all duration-300 ${editingId ? 'ring-2 ring-primary' : ''}`}>
-            <CardHeader className="bg-secondary/40 border-b border-border/50 pb-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-xl font-black text-foreground flex items-center gap-2">
-                {editingId ? <Edit3 className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
-                {editingId ? "Edit Menu Item" : "Add Menu Item"}
-              </CardTitle>
-              {editingId && (
-                <Button variant="ghost" size="sm" onClick={resetForm} className="h-8 px-2 text-muted-foreground hover:text-foreground">
-                  <X className="w-4 h-4 mr-1" /> Cancel
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="p-6">
-              <form onSubmit={handleSaveItem} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Category</label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="h-11 bg-secondary/20 border-border/60 rounded-xl">
-                      <SelectValue placeholder="Select Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Item Name</label>
-                  <Input 
-                    required 
-                    placeholder="e.g. Extreme Double Layer" 
-                    className="h-11 bg-secondary/20 border-border/60 rounded-xl font-medium"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
-                  <Input 
-                    placeholder="e.g. Medium: 1650 | Large: 2400" 
-                    className="h-11 bg-secondary/20 border-border/60 rounded-xl text-sm"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+        {/* ADD NEW ITEM SECTION */}
+        {activeTab === "add" && (
+          <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <Card className="border-border/60 shadow-xl bg-background rounded-3xl overflow-hidden">
+              <CardHeader className="bg-secondary/40 border-b border-border/50 pb-4">
+                <CardTitle className="text-xl font-black text-foreground flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-primary" /> Add New Menu Item
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <form onSubmit={handleAddItem} className="space-y-5">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Price (Rs.)</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Category</label>
+                    <Select value={addCategory} onValueChange={setAddCategory}>
+                      <SelectTrigger className="h-12 bg-secondary/20 border-border/60 rounded-xl">
+                        <SelectValue placeholder="Select Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Item Name</label>
                     <Input 
                       required 
-                      type="number"
-                      placeholder="1650" 
-                      className="h-11 bg-secondary/20 border-border/60 rounded-xl font-bold text-primary"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="e.g. Extreme Double Layer" 
+                      className="h-12 bg-secondary/20 border-border/60 rounded-xl font-medium"
+                      value={addName}
+                      onChange={(e) => setAddName(e.target.value)}
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Badge (Optional)</label>
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
                     <Input 
-                      placeholder="e.g. NEW" 
-                      className="h-11 bg-secondary/20 border-border/60 rounded-xl"
-                      value={badge}
-                      onChange={(e) => setBadge(e.target.value)}
+                      placeholder="e.g. Medium: 1650 | Large: 2400" 
+                      className="h-12 bg-secondary/20 border-border/60 rounded-xl text-sm"
+                      value={addDescription}
+                      onChange={(e) => setAddDescription(e.target.value)}
                     />
                   </div>
-                </div>
 
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full h-12 mt-2 font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-md transition-all"
-                >
-                  {isSubmitting ? "Saving..." : (editingId ? "Update Item" : "Save to Menu")}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Price (Rs.)</label>
+                      <Input 
+                        required 
+                        type="number"
+                        placeholder="1650" 
+                        className="h-12 bg-secondary/20 border-border/60 rounded-xl font-bold text-primary"
+                        value={addPrice}
+                        onChange={(e) => setAddPrice(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Badge (Optional)</label>
+                      <Input 
+                        placeholder="e.g. NEW" 
+                        className="h-12 bg-secondary/20 border-border/60 rounded-xl"
+                        value={addBadge}
+                        onChange={(e) => setAddBadge(e.target.value)}
+                      />
+                    </div>
+                  </div>
 
-        {/* MENU ITEMS LIST */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-foreground flex items-center gap-2">
-              <Pizza className="w-6 h-6 text-primary" /> Live Menu Database
-            </h2>
-            <Badge variant="outline" className="text-muted-foreground bg-white font-bold">
-              {items.length} Items
-            </Badge>
+                  <Button 
+                    type="submit" 
+                    disabled={isAdding}
+                    className="w-full h-14 mt-4 text-lg font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg transition-transform active:scale-[0.98]"
+                  >
+                    {isAdding ? "Adding Item..." : "Publish to Menu"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           </div>
+        )}
 
-          {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Loading menu items...</div>
-          ) : items.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-3xl border border-border/50 shadow-sm">
-              <Tag className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-40" />
-              <h3 className="text-lg font-bold text-foreground">Menu is empty</h3>
-              <p className="text-sm text-muted-foreground mt-1">Start adding items from the panel to build your menu.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {CATEGORIES.map((cat) => {
+        {/* MANAGE & EDIT SECTION */}
+        {activeTab === "edit" && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {loading ? (
+              <div className="text-center py-20 text-muted-foreground font-medium">Loading menu database...</div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-24 bg-white rounded-3xl border border-border/50 shadow-sm">
+                <Tag className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-40" />
+                <h3 className="text-xl font-bold text-foreground">Your Menu is Empty</h3>
+                <p className="text-muted-foreground mt-2">Switch to the "Add New Item" tab to start building your menu.</p>
+              </div>
+            ) : (
+              CATEGORIES.map((cat) => {
                 const categoryItems = items.filter(item => item.category === cat);
                 if (categoryItems.length === 0) return null;
 
                 return (
-                  <div key={cat} className="mb-6 space-y-3">
-                    <h3 className="text-lg font-bold text-slate-800 border-b border-border/60 pb-2">{cat}</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {categoryItems.map((item) => (
-                        <Card key={item.id} className={`relative overflow-hidden border-border/60 shadow-sm bg-white rounded-2xl group transition-all ${editingId === item.id ? 'ring-2 ring-primary/50' : ''}`}>
-                          {item.badge && (
-                            <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-white z-10 text-[10px]">
-                              {item.badge}
-                            </Badge>
-                          )}
-                          <CardContent className="p-4 flex flex-col justify-between h-full">
-                            <div>
-                              <div className="flex justify-between items-start gap-2 pr-8">
-                                <h4 className="font-bold text-foreground leading-tight">{item.name}</h4>
+                  <div key={cat} className="space-y-4">
+                    <h3 className="text-xl font-black text-slate-800 border-b-2 border-primary/20 pb-2 inline-block">{cat}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {categoryItems.map((item) => {
+                        
+                        // IF ITEM IS IN EDIT MODE
+                        if (editingId === item.id) {
+                          return (
+                            <Card key={item.id} className="relative overflow-hidden border-primary ring-2 ring-primary/40 shadow-lg bg-secondary/10 rounded-2xl">
+                              <CardContent className="p-4 flex flex-col gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Name</label>
+                                  <Input value={editForm.name} onChange={(e) => setEditForm({...editForm, name: e.target.value})} className="h-8 text-sm font-bold bg-white" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Description</label>
+                                  <Input value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="h-8 text-xs bg-white" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Price</label>
+                                    <Input type="number" value={editForm.price} onChange={(e) => setEditForm({...editForm, price: e.target.value})} className="h-8 text-sm font-bold text-primary bg-white" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Badge</label>
+                                    <Input placeholder="e.g. NEW" value={editForm.badge} onChange={(e) => setEditForm({...editForm, badge: e.target.value})} className="h-8 text-xs bg-white" />
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 mt-2">
+                                  <Button onClick={() => handleUpdateItem(item.id)} disabled={isUpdating} className="flex-1 h-9 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg shadow-sm">
+                                    <Save className="w-4 h-4 mr-1.5" /> Save
+                                  </Button>
+                                  <Button onClick={() => setEditingId(null)} variant="outline" className="flex-1 h-9 rounded-lg border-slate-300">
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+
+                        // STANDARD VIEW MODE
+                        return (
+                          <Card key={item.id} className="relative overflow-hidden border-border/60 shadow-sm hover:shadow-md transition-all bg-white rounded-2xl group flex flex-col justify-between">
+                            {item.badge && (
+                              <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-white z-10 text-[10px] uppercase font-black tracking-wider">
+                                {item.badge}
+                              </Badge>
+                            )}
+                            <CardContent className="p-5 flex flex-col flex-grow justify-between gap-4">
+                              <div>
+                                <h4 className="font-bold text-foreground text-lg leading-tight pr-8">{item.name}</h4>
+                                <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-relaxed">{item.description}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
-                            </div>
-                            
-                            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50">
-                              <span className="font-black text-primary">{formatPrice(item.price)}</span>
                               
-                              <div className="flex items-center gap-1">
-                                <button 
-                                  onClick={() => handleEditClick(item)}
-                                  className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                                  title="Edit Item"
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </button>
-                                <button 
-                                  onClick={() => handleDelete(item.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete Item"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                              <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                                <span className="text-xl font-black text-primary">{formatPrice(item.price)}</span>
+                                
+                                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={() => startEditing(item)}
+                                    className="p-2 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors"
+                                    title="Edit Price & Details"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDelete(item.id)}
+                                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                                    title="Delete Item"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </div>
+              })
+            )}
+          </div>
+        )}
 
       </main>
     </div>
