@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Loader2, Clock, ChefHat, Bike, CheckCircle2, MapPin, Phone, User, ChevronLeft, Pizza } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -37,6 +37,26 @@ function TrackOrder() {
   const [order, setOrder] = useState<Order | null>(null);
   const [searched, setSearched] = useState(false);
 
+  // REAL-TIME LISTENER FOR LIVE TRACKING
+  useEffect(() => {
+    if (!order?.id) return;
+
+    const channel = supabase
+      .channel(`track-order-${order.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${order.id}` },
+        (payload) => {
+          setOrder(payload.new as Order);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [order?.id]);
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -61,7 +81,7 @@ function TrackOrder() {
     setLoading(false);
   }
 
-  // If order status is Archived, treat it as Delivered for customer tracking
+  // Map archived orders to show as Delivered on the customer end
   const currentOrderStatus = order?.status === 'Archived' ? 'Delivered' : (order?.status || "Pending");
 
   return (
