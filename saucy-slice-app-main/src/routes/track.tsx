@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Loader2, Clock, ChefHat, Bike, CheckCircle2, MapPin, Phone, User, ChevronLeft, Pizza } from "lucide-react";
+import { Search, Loader2, Clock, ChefHat, Bike, CheckCircle2, MapPin, Phone, User, ChevronLeft, Pizza, Star } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ type Order = {
   order_details: string;
   status: string;
   order_ref: string;
+  rating: number | null;
   created_at: string;
 };
 
@@ -79,6 +80,23 @@ function TrackOrder() {
       setOrder(null);
     }
     setLoading(false);
+  }
+
+  async function handleRating(ratingValue: number) {
+    if (!order || order.rating) return;
+    
+    // Instantly update the UI
+    setOrder({ ...order, rating: ratingValue });
+
+    // Save to database
+    const { error } = await supabase
+      .from("orders")
+      .update({ rating: ratingValue })
+      .eq("id", order.id);
+
+    if (error) {
+      alert("Failed to submit rating. Please try again.");
+    }
   }
 
   // Map archived orders to show as Delivered on the customer end
@@ -137,7 +155,7 @@ function TrackOrder() {
           </div>
         ) : order ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <Card className="border-border/60 shadow-xl bg-white rounded-3xl overflow-hidden p-6 sm:p-8">
+            <Card className="border-border/60 shadow-xl bg-white rounded-3xl overflow-hidden p-6 sm:p-8 flex flex-col">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b border-border/50 gap-4">
                 <div>
                   <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Order Reference</span>
@@ -228,6 +246,39 @@ function TrackOrder() {
                   </div>
                 </div>
               </div>
+
+              {/* STAR RATING SECTION (Only shows when Delivered or Archived) */}
+              {currentOrderStatus === "Delivered" && (
+                <div className="mt-8 pt-6 border-t border-border/50 text-center bg-secondary/30 p-6 rounded-2xl">
+                  <h4 className="font-bold text-lg text-foreground mb-1">How was your Pizza Saucy experience?</h4>
+                  <p className="text-sm text-muted-foreground mb-4">Tap a star to rate your order!</p>
+                  
+                  <div className="flex justify-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        disabled={!!order.rating}
+                        onClick={() => handleRating(star)}
+                        className={`p-1 transition-all ${!order.rating ? 'hover:scale-110 active:scale-95' : 'cursor-default'}`}
+                      >
+                        <Star 
+                          className={`w-8 h-8 transition-colors ${
+                            (order.rating && star <= order.rating) 
+                              ? "fill-amber-400 text-amber-400" 
+                              : "text-slate-300 hover:text-amber-300 hover:fill-amber-300"
+                          }`} 
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  {order.rating && (
+                    <p className="text-sm font-bold text-amber-500 mt-3 animate-in fade-in zoom-in duration-300">
+                      Thanks for your feedback!
+                    </p>
+                  )}
+                </div>
+              )}
             </Card>
           </div>
         ) : null}
