@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { ChevronLeft, Plus, Trash2, Tag, Edit3, Settings, X, Save, LayoutList } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Tag, Edit3, Settings, Save, LayoutList, Image as ImageIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ type MenuItem = {
   description: string;
   price: number;
   badge: string | null;
+  image_url: string | null;
   is_active: boolean;
 };
 
@@ -48,10 +49,11 @@ function MenuCMS() {
   const [addDescription, setAddDescription] = useState("");
   const [addPrice, setAddPrice] = useState("");
   const [addBadge, setAddBadge] = useState("");
+  const [addImageUrl, setAddImageUrl] = useState("");
 
   // State for Inline Editing
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ category: "", name: "", description: "", price: "", badge: "" });
+  const [editForm, setEditForm] = useState({ category: "", name: "", description: "", price: "", badge: "", image_url: "" });
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
@@ -83,6 +85,7 @@ function MenuCMS() {
       description: addDescription,
       price: parseFloat(addPrice),
       badge: addBadge.trim() || null,
+      image_url: addImageUrl.trim() || null,
       is_active: true,
     };
 
@@ -95,6 +98,7 @@ function MenuCMS() {
       setAddDescription("");
       setAddPrice("");
       setAddBadge("");
+      setAddImageUrl("");
       fetchItems();
       setActiveTab("edit"); // Auto-switch back to view the new item
     }
@@ -109,7 +113,8 @@ function MenuCMS() {
       name: item.name,
       description: item.description || "",
       price: item.price.toString(),
-      badge: item.badge || ""
+      badge: item.badge || "",
+      image_url: item.image_url || ""
     });
   }
 
@@ -124,6 +129,7 @@ function MenuCMS() {
       description: editForm.description,
       price: parseFloat(editForm.price),
       badge: editForm.badge.trim() || null,
+      image_url: editForm.image_url.trim() || null,
     };
 
     const { error } = await supabase
@@ -152,7 +158,7 @@ function MenuCMS() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col">
-      {/* HEADER SECTION - EXACTLY LIKE ADMIN PANEL */}
+      {/* HEADER SECTION */}
       <header className="w-full bg-[#111827] border-b border-border/10 p-4 sticky top-0 z-10 shadow-md">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-white">
           <div className="flex items-center gap-2">
@@ -256,6 +262,18 @@ function MenuCMS() {
                     </div>
                   </div>
 
+                  <div className="space-y-2 pt-2 border-t border-border/50">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <ImageIcon className="w-3.5 h-3.5" /> Image Link (Optional, for Deals)
+                    </label>
+                    <Input 
+                      placeholder="e.g. /deal-family-feast.jpg" 
+                      className="h-12 bg-secondary/20 border-border/60 rounded-xl"
+                      value={addImageUrl}
+                      onChange={(e) => setAddImageUrl(e.target.value)}
+                    />
+                  </div>
+
                   <Button 
                     type="submit" 
                     disabled={isAdding}
@@ -314,6 +332,10 @@ function MenuCMS() {
                                     <Input placeholder="e.g. NEW" value={editForm.badge} onChange={(e) => setEditForm({...editForm, badge: e.target.value})} className="h-8 text-xs bg-white" />
                                   </div>
                                 </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Image URL (For Deals)</label>
+                                  <Input placeholder="e.g. /deal-family-feast.jpg" value={editForm.image_url} onChange={(e) => setEditForm({...editForm, image_url: e.target.value})} className="h-8 text-xs bg-white" />
+                                </div>
                                 <div className="flex gap-2 mt-2">
                                   <Button onClick={() => handleUpdateItem(item.id)} disabled={isUpdating} className="flex-1 h-9 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg shadow-sm">
                                     <Save className="w-4 h-4 mr-1.5" /> Save
@@ -334,6 +356,11 @@ function MenuCMS() {
                               <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-white z-10 text-[10px] uppercase font-black tracking-wider">
                                 {item.badge}
                               </Badge>
+                            )}
+                            {item.image_url && (
+                              <div className="h-24 w-full bg-slate-100 overflow-hidden">
+                                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover opacity-80" />
+                              </div>
                             )}
                             <CardContent className="p-5 flex flex-col flex-grow justify-between gap-4">
                               <div>
