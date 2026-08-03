@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { MapPin, Pizza, ShoppingBag, ChevronRight, X, Plus, Minus, Trash2, Menu } from "lucide-react";
+import { MapPin, Pizza, ShoppingBag, ChevronRight, X, Plus, Minus, Trash2, Menu, Loader2 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,11 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-import familyFeastImg from "@/assets/deal-family-feast.jpg";
-import soloBiteImg from "@/assets/deal-solo-bite.jpg";
-import midnightCravingImg from "@/assets/deal-midnight-craving.jpg";
-import heroPizza from "@/assets/hero-pizza.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,83 +29,33 @@ const BRANCHES = [
   { value: "ghaziabad", label: "Ghaziabad (Branch 3)" },
 ];
 
-const REAL_DEALS = [
-  { id: "deal-1", title: "Deal No. 1", description: "2 Small Pizzas, 1 Half Liter Drink", price: 1350, image: familyFeastImg },
-  { id: "deal-2", title: "Deal No. 2", description: "2 Medium Pizzas, 1.5 Liter Drink", price: 2300, image: soloBiteImg },
-  { id: "deal-3", title: "Deal No. 3", description: "2 Large Pizzas, 1.5 Liter Drink", price: 3300, image: midnightCravingImg },
-  { id: "deal-4", title: "Deal No. 4", description: "2 Family Pizzas, 1.5 Liter Drink", price: 4400 },
-  { id: "family-deal-5", title: "Family Deal No 5", description: "1 Large Pizza, 10 Pcs Nuggets, 2 Zinger Burgers, 1.5L Drink", price: 3000 },
-  { id: "deal-6", title: "Deal No. 6", description: "1 Family Pizza, 2 Zinger Burgers, 1 Large Fries, 1.5L Drink", price: 3300 },
-  { id: "single-deal", title: "Single Deal", description: "King Zinger, Small Fries, 1 Regular Drink", price: 530 },
-  { id: "deal-7", title: "Deal No. 7", description: "2 Chicken Burgers, 1 Half Liter Drink", price: 700 },
-  { id: "deal-8", title: "Deal No. 8", description: "3 Zinger Burgers, 1 Liter Drink", price: 1200 },
-  { id: "deal-9", title: "Deal No. 9", description: "4 Zinger Burgers, 1.5 Liter Drink", price: 1600 },
-  { id: "deal-10", title: "Deal No. 10", description: "6 Zinger Burgers, 1.5 Liter Drink", price: 2300 },
-  { id: "deal-11", title: "Deal No. 11", description: "8 Zinger Burgers, 1.5 Liter Drink", price: 3000 },
-];
+type MenuItem = {
+  id: string;
+  category: string;
+  name: string;
+  description: string;
+  price: number;
+  badge: string | null;
+  image_url: string | null;
+  is_active: boolean;
+};
 
-type MenuItem = { name: string; price: number; desc: string; badge?: string };
-
-const PIZZAS_SIGNATURE: MenuItem[] = [
-  { name: "Extreme Double Layer", price: 1650, desc: "Medium: 1650 | Large: 2400 | Full: 3200" },
-  { name: "Turkish Pizza", price: 1550, desc: "Medium: 1550 | Large: 2100 | Full: 2700" },
-  { name: "Kabab Crust", price: 1550, desc: "Medium: 1550 | Large: 2100 | Full: 2700" },
-  { name: "Crown Crust", price: 1550, desc: "Medium: 1550 | Large: 2100 | Full: 2700" },
-  { name: "Kabab Pizza", price: 800, desc: "Small: 800 | Medium: 1500 | Large: 2000" },
-];
-
-const PIZZAS_SPECIAL: MenuItem[] = [
-  { name: "Malai Boti Pizza", price: 750, desc: "Small: 750 | Medium: 1300 | Large: 1900" },
-  { name: "Pizza Saucy Special", price: 750, desc: "Small: 750 | Medium: 1350 | Large: 1900" },
-  { name: "Executive Pizza", price: 750, desc: "Small: 750 | Medium: 1400 | Large: 2000" },
-  { name: "Chicken Tikka Creamy", price: 750, desc: "Small: 750 | Medium: 1300 | Large: 1800" },
-  { name: "Chicken Chilli Pizza", price: 750, desc: "Small: 750 | Medium: 1350 | Large: 1900" },
-];
-
-const PIZZAS_REGULAR: MenuItem[] = [
-  { name: "Chicken Tikka", price: 690, desc: "Small: 690 | Medium: 1200 | Large: 1700" },
-  { name: "Chicken Fajita", price: 690, desc: "Small: 690 | Medium: 1200 | Large: 1700" },
-  { name: "Chicken Supreme", price: 690, desc: "Small: 690 | Medium: 1200 | Large: 1700" },
-  { name: "Mughlai Pizza", price: 690, desc: "Small: 690 | Medium: 1200 | Large: 1700" },
-  { name: "Desi Chaska", price: 750, desc: "Small: 750 | Medium: 1300 | Large: 1900" },
-];
-
-const BURGERS: MenuItem[] = [
-  { name: "Wehshi Burger", price: 680, desc: "Our massive signature sandwich" },
-  { name: "Molten Lawa", price: 700, desc: "New Arrival", badge: "NEW" },
-  { name: "Fish Burger", price: 500, desc: "Single: 500 | Double: 750", badge: "NEW" },
-  { name: "Pizza Burger", price: 630, desc: "Best of both worlds" },
-  { name: "Grill Burger", price: 630, desc: "Freshly grilled patty" },
-  { name: "Special Zinger", price: 630, desc: "Crispy signature zinger" },
-  { name: "Chicken Fillet", price: 390, desc: "Classic fillet" },
-  { name: "Hot & Spicy", price: 390, desc: "For the spice lovers" },
-  { name: "Zinger Burger", price: 390, desc: "Classic crunch" },
-  { name: "Chicken Burger", price: 360, desc: "Simple and delicious" },
-];
-
-const WRAPS_AND_SIDES: MenuItem[] = [
-  { name: "8 Pcs Injected Broast", price: 2400, desc: "4 Buns + Fries + Dip", badge: "NEW" },
-  { name: "Injected Wrap", price: 700, desc: "Flavor packed wrap", badge: "NEW" },
-  { name: "Loaded Fries", price: 700, desc: "Crispy fillet & grill fries" },
-  { name: "Chicken Cheese Sticks", price: 680, desc: "Cheesy goodness" },
-  { name: "Grilled Wings", price: 650, desc: "10 Pieces" },
-  { name: "Salsa Wings", price: 650, desc: "10 Pieces", badge: "NEW" },
-  { name: "Special Pizza Paratha", price: 650, desc: "Stuffed to perfection" },
-  { name: "Macroni Pasta", price: 600, desc: "Creamy baked pasta" },
-  { name: "Tortilla Wrap", price: 600, desc: "Classic wrap" },
-  { name: "Saucy Sandwich", price: 600, desc: "New Arrival", badge: "NEW" },
-  { name: "Hot Shots", price: 600, desc: "Bite sized crunch" },
-  { name: "Nuggets", price: 600, desc: "10 Pieces" },
-  { name: "Zingratha", price: 390, desc: "Zinger + Paratha" },
-  { name: "Fries Large", price: 320, desc: "Medium: 200 | Large: 320" },
+const MENU_CATEGORIES = [
+  "Signature Pizzas",
+  "Special Pizzas",
+  "Regular Pizzas",
+  "Premium Burgers",
+  "Wraps & Sides",
 ];
 
 function formatPrice(value: number) {
-  return `Rs. ${value.toLocaleString("en-PK")}`;
+  return `Rs. ${Math.round(value).toLocaleString("en-PK")}`;
 }
 
 function Index() {
   const [branch, setBranch] = useState(BRANCHES[0].value);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const [cart, setCart] = useState<{ id: string; name: string; price: number; quantity: number }[]>(() => {
     if (typeof window !== "undefined") {
@@ -125,6 +71,24 @@ function Index() {
   useEffect(() => {
     localStorage.setItem("saucy_cart", JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    fetchMenu();
+  }, []);
+
+  async function fetchMenu() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setMenuItems(data);
+    }
+    setLoading(false);
+  }
 
   const addToCart = (item: { name: string; price: number }) => {
     setCart((prev) => {
@@ -158,6 +122,8 @@ function Index() {
     document.getElementById("menu-section")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const valueDeals = menuItems.filter(item => item.category === "Value Deals");
+
   return (
     <div className="flex min-h-screen flex-col relative overflow-hidden">
       <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
@@ -170,13 +136,11 @@ function Index() {
           </Link>
           
           <nav className="flex items-center gap-2 sm:gap-3">
-            {/* Desktop Links (Hidden on Mobile) */}
             <a href="#deals" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Deals</a>
             <a href="#menu-section" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Menu</a>
             <Link to="/track" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Track Order</Link>
             <Link to="/profile" className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline">Account</Link>
             
-            {/* Cart Button */}
             <Button variant="ghost" size="icon" className="shrink-0 relative" onClick={() => setIsCartOpen(true)}>
               <ShoppingBag className="h-5 w-5" />
               {cartItemCount > 0 && (
@@ -186,7 +150,6 @@ function Index() {
               )}
             </Button>
 
-            {/* Mobile Hamburger Menu Button */}
             <Button variant="ghost" size="icon" className="shrink-0 sm:hidden" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu className="h-6 w-6" />
             </Button>
@@ -195,6 +158,7 @@ function Index() {
       </header>
 
       <main className="flex-1">
+        {/* HERO SECTION */}
         <section className="relative overflow-hidden bg-primary px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-14 lg:px-8 lg:pb-20 lg:pt-20">
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
             <div className="relative z-10 flex flex-col items-center text-center lg:items-start lg:text-left">
@@ -230,82 +194,100 @@ function Index() {
             </div>
             <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
               <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border-4 border-primary-foreground/10 shadow-2xl lg:aspect-[16/10]">
-                <img src={heroPizza} alt="Pizza" width={1280} height={720} className="h-full w-full object-cover" />
+                {/* Image loaded from the public folder */}
+                <img src="/hero-pizza.jpg" alt="Pizza" width={1280} height={720} className="h-full w-full object-cover" />
               </div>
             </div>
           </div>
         </section>
 
-        <section id="deals" className="px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-10 text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Value Deals</h2>
-              <p className="mt-3 text-base text-muted-foreground">Any time, Any day. The best combos in town.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {REAL_DEALS.map((deal) => (
-                <Card key={deal.id} className="group overflow-hidden border-border/60 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col">
-                  {deal.image && (
-                    <div className="relative aspect-[4/3] overflow-hidden">
-                      <img src={deal.image} alt={deal.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    </div>
-                  )}
-                  <CardContent className="flex flex-col flex-grow gap-3 p-5">
-                    <h3 className="text-xl font-bold tracking-tight text-card-foreground">{deal.title}</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground flex-grow">{deal.description}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-2xl font-bold text-primary">{formatPrice(deal.price)}</span>
-                      <Button size="sm" onClick={() => addToCart({ name: deal.title, price: deal.price })} className="rounded-full px-5 font-semibold shadow-sm">Add</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-32 space-y-4">
+            <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            <p className="text-muted-foreground font-medium text-lg">Loading fresh menu from the kitchen...</p>
           </div>
-        </section>
-
-        <section id="menu-section" className="px-4 py-14 sm:px-6 sm:py-20 lg:px-8 bg-secondary/30">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-12 text-center">
-              <Badge variant="outline" className="mb-4 w-fit border-primary text-primary uppercase tracking-wider">Full Menu</Badge>
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Explore Our Menu</h2>
-            </div>
-            
-            {[
-              { title: "Signature Pizzas", items: PIZZAS_SIGNATURE },
-              { title: "Special Pizzas", items: PIZZAS_SPECIAL },
-              { title: "Regular Pizzas", items: PIZZAS_REGULAR },
-              { title: "Premium Burgers", items: BURGERS },
-              { title: "Wraps, Broast & Sides", items: WRAPS_AND_SIDES },
-            ].map((category, idx) => (
-              <div key={idx} className="mb-12">
-                <h3 className="text-2xl font-bold text-foreground mb-6 border-b-2 border-primary pb-2 inline-block">{category.title}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {category.items.map((item, itemIdx) => (
-                    <Card key={itemIdx} className="flex gap-4 items-center p-4 transition-all duration-300 hover:shadow-md relative overflow-hidden border-border/60">
-                      {item.badge && <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-primary-foreground z-10">{item.badge}</Badge>}
-                      <div className="flex-grow">
-                        <h4 className="text-lg font-bold text-card-foreground">{item.name}</h4>
-                        <p className="text-sm text-muted-foreground mb-3">{item.desc}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-primary">Rs. {item.price}</span>
-                          <Button 
-                            size="sm" 
-                            variant="secondary" 
-                            onClick={() => addToCart({ name: item.name, price: item.price })}
-                            className="rounded-full px-3 hover:bg-primary hover:text-primary-foreground"
-                          >
-                            +
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+        ) : (
+          <>
+            {/* VALUE DEALS SECTION */}
+            {valueDeals.length > 0 && (
+              <section id="deals" className="px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
+                <div className="mx-auto max-w-7xl">
+                  <div className="mb-10 text-center">
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Value Deals</h2>
+                    <p className="mt-3 text-base text-muted-foreground">Any time, Any day. The best combos in town.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {valueDeals.map((deal) => (
+                      <Card key={deal.id} className="group overflow-hidden border-border/60 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col relative">
+                        {deal.badge && (
+                          <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-white z-10 text-[10px] uppercase font-black tracking-wider">
+                            {deal.badge}
+                          </Badge>
+                        )}
+                        {deal.image_url && (
+                          <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                            <img src={deal.image_url} alt={deal.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                          </div>
+                        )}
+                        <CardContent className="flex flex-col flex-grow gap-3 p-5">
+                          <h3 className="text-xl font-bold tracking-tight text-card-foreground">{deal.name}</h3>
+                          <p className="text-sm leading-relaxed text-muted-foreground flex-grow">{deal.description}</p>
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-2xl font-bold text-primary">{formatPrice(deal.price)}</span>
+                            <Button size="sm" onClick={() => addToCart({ name: deal.name, price: deal.price })} className="rounded-full px-5 font-semibold shadow-sm">Add</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
+              </section>
+            )}
+
+            {/* FULL MENU SECTION */}
+            <section id="menu-section" className="px-4 py-14 sm:px-6 sm:py-20 lg:px-8 bg-secondary/30">
+              <div className="mx-auto max-w-7xl">
+                <div className="mb-12 text-center">
+                  <Badge variant="outline" className="mb-4 w-fit border-primary text-primary uppercase tracking-wider">Full Menu</Badge>
+                  <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Explore Our Menu</h2>
+                </div>
+                
+                {MENU_CATEGORIES.map((cat, idx) => {
+                  const categoryItems = menuItems.filter(item => item.category === cat);
+                  if (categoryItems.length === 0) return null;
+
+                  return (
+                    <div key={idx} className="mb-12">
+                      <h3 className="text-2xl font-bold text-foreground mb-6 border-b-2 border-primary pb-2 inline-block">{cat}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {categoryItems.map((item) => (
+                          <Card key={item.id} className="flex gap-4 items-center p-4 transition-all duration-300 hover:shadow-md relative overflow-hidden border-border/60 bg-card">
+                            {item.badge && <Badge className="absolute top-0 right-0 rounded-bl-lg rounded-tr-none bg-primary text-primary-foreground z-10">{item.badge}</Badge>}
+                            <div className="flex-grow">
+                              <h4 className="text-lg font-bold text-card-foreground">{item.name}</h4>
+                              <p className="text-sm text-muted-foreground mb-3">{item.description}</p>
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-primary">{formatPrice(item.price)}</span>
+                                <Button 
+                                  size="sm" 
+                                  variant="secondary" 
+                                  onClick={() => addToCart({ name: item.name, price: item.price })}
+                                  className="rounded-full px-3 hover:bg-primary hover:text-primary-foreground"
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </main>
 
       {/* CART SIDEBAR */}

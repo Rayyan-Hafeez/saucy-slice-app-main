@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { ChevronLeft, Plus, Trash2, Tag, Edit3, Settings, Save, LayoutList, Image as ImageIcon } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Tag, Edit3, Settings, Save, LayoutList, Image as ImageIcon, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +41,7 @@ function MenuCMS() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"edit" | "add">("edit");
+  const [isUploading, setIsUploading] = useState(false);
   
   // State for Add Form
   const [isAdding, setIsAdding] = useState(false);
@@ -73,6 +74,37 @@ function MenuCMS() {
     setLoading(false);
   }
 
+  // Handle direct file uploads to Supabase Storage
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>, setUrlCallback: (url: string) => void) {
+    try {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const file = e.target.files[0];
+      setIsUploading(true);
+
+      // Create a unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Upload to Supabase 'menu-images' bucket
+      const { error: uploadError } = await supabase.storage
+        .from('menu-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL of the uploaded image
+      const { data } = supabase.storage.from('menu-images').getPublicUrl(filePath);
+      
+      // Update the form with the new URL
+      setUrlCallback(data.publicUrl);
+    } catch (error: any) {
+      alert("Error uploading image: " + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   // Add Item Logic
   async function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
@@ -100,7 +132,7 @@ function MenuCMS() {
       setAddBadge("");
       setAddImageUrl("");
       fetchItems();
-      setActiveTab("edit"); // Auto-switch back to view the new item
+      setActiveTab("edit");
     }
     setIsAdding(false);
   }
@@ -158,7 +190,6 @@ function MenuCMS() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col">
-      {/* HEADER SECTION */}
       <header className="w-full bg-[#111827] border-b border-border/10 p-4 sticky top-0 z-10 shadow-md">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-white">
           <div className="flex items-center gap-2">
@@ -262,21 +293,47 @@ function MenuCMS() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-2 border-t border-border/50">
+                  {/* DUAL IMAGE INPUT SECTION */}
+                  <div className="space-y-3 pt-4 border-t border-border/50">
                     <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <ImageIcon className="w-3.5 h-3.5" /> Image Link (Optional, for Deals)
+                      <ImageIcon className="w-4 h-4" /> Image (Upload OR Link)
                     </label>
-                    <Input 
-                      placeholder="e.g. /deal-family-feast.jpg" 
-                      className="h-12 bg-secondary/20 border-border/60 rounded-xl"
-                      value={addImageUrl}
-                      onChange={(e) => setAddImageUrl(e.target.value)}
-                    />
+                    
+                    <div className="flex flex-col gap-3 p-3 bg-secondary/20 rounded-xl border border-border/60">
+                      <div className="relative">
+                        <Input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, setAddImageUrl)}
+                          disabled={isUploading}
+                          className="cursor-pointer h-12 bg-white border-border/60 rounded-lg file:mr-4 file:py-1.5 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-primary file:text-white hover:file:bg-primary/90"
+                        />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <div className="h-px bg-border flex-1"></div>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">OR PASTE LINK</span>
+                        <div className="h-px bg-border flex-1"></div>
+                      </div>
+
+                      <Input 
+                        placeholder="e.g. https://... or /deal-family-feast.jpg" 
+                        className="h-11 bg-white border-border/60 rounded-lg text-sm"
+                        value={addImageUrl}
+                        onChange={(e) => setAddImageUrl(e.target.value)}
+                        disabled={isUploading}
+                      />
+                    </div>
+                    {isUploading && (
+                      <p className="text-xs text-primary font-bold flex items-center gap-1 animate-pulse">
+                        <UploadCloud className="w-4 h-4" /> Uploading securely to database...
+                      </p>
+                    )}
                   </div>
 
                   <Button 
                     type="submit" 
-                    disabled={isAdding}
+                    disabled={isAdding || isUploading}
                     className="w-full h-14 mt-4 text-lg font-bold rounded-xl bg-primary hover:bg-primary/90 text-white shadow-lg transition-transform active:scale-[0.98]"
                   >
                     {isAdding ? "Adding Item..." : "Publish to Menu"}
@@ -332,15 +389,39 @@ function MenuCMS() {
                                     <Input placeholder="e.g. NEW" value={editForm.badge} onChange={(e) => setEditForm({...editForm, badge: e.target.value})} className="h-8 text-xs bg-white" />
                                   </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Image URL (For Deals)</label>
-                                  <Input placeholder="e.g. /deal-family-feast.jpg" value={editForm.image_url} onChange={(e) => setEditForm({...editForm, image_url: e.target.value})} className="h-8 text-xs bg-white" />
+                                
+                                {/* DUAL IMAGE INPUT IN EDIT MODE */}
+                                <div className="space-y-2 mt-2 p-3 border border-border/60 rounded-xl bg-black/5">
+                                  <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                                    <ImageIcon className="w-3 h-3" /> Image (Upload OR Link)
+                                  </label>
+                                  <Input 
+                                    type="file" 
+                                    accept="image/*"
+                                    onChange={(e) => handleImageUpload(e, (url) => setEditForm({...editForm, image_url: url}))}
+                                    disabled={isUploading}
+                                    className="h-8 text-[10px] file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:bg-primary file:text-white cursor-pointer bg-white"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-px bg-border/50 flex-1"></div>
+                                    <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider">OR PASTE LINK</span>
+                                    <div className="h-px bg-border/50 flex-1"></div>
+                                  </div>
+                                  <Input 
+                                    placeholder="e.g. /deal.jpg or https://..." 
+                                    value={editForm.image_url} 
+                                    onChange={(e) => setEditForm({...editForm, image_url: e.target.value})} 
+                                    className="h-8 text-xs bg-white" 
+                                    disabled={isUploading}
+                                  />
+                                  {isUploading && <p className="text-[10px] text-primary font-bold animate-pulse">Uploading...</p>}
                                 </div>
+
                                 <div className="flex gap-2 mt-2">
-                                  <Button onClick={() => handleUpdateItem(item.id)} disabled={isUpdating} className="flex-1 h-9 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg shadow-sm">
+                                  <Button onClick={() => handleUpdateItem(item.id)} disabled={isUpdating || isUploading} className="flex-1 h-9 bg-primary hover:bg-primary/90 text-white font-bold rounded-lg shadow-sm">
                                     <Save className="w-4 h-4 mr-1.5" /> Save
                                   </Button>
-                                  <Button onClick={() => setEditingId(null)} variant="outline" className="flex-1 h-9 rounded-lg border-slate-300">
+                                  <Button onClick={() => setEditingId(null)} disabled={isUploading} variant="outline" className="flex-1 h-9 rounded-lg border-slate-300 bg-white">
                                     Cancel
                                   </Button>
                                 </div>
@@ -358,8 +439,8 @@ function MenuCMS() {
                               </Badge>
                             )}
                             {item.image_url && (
-                              <div className="h-24 w-full bg-slate-100 overflow-hidden">
-                                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover opacity-80" />
+                              <div className="h-32 w-full bg-slate-100 overflow-hidden relative">
+                                <img src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
                               </div>
                             )}
                             <CardContent className="p-5 flex flex-col flex-grow justify-between gap-4">
