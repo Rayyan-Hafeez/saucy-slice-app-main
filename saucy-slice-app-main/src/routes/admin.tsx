@@ -64,7 +64,6 @@ function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   
-  // New Promo State
   const [newPromoCode, setNewPromoCode] = useState("");
   const [newPromoType, setNewPromoType] = useState("percentage");
   const [newPromoValue, setNewPromoValue] = useState("");
@@ -144,24 +143,42 @@ function AdminDashboard() {
     if (!error) fetchPromos();
   }
 
+  // INSTANT LOCAL STATE UPDATE FOR STATUS
   async function updateStatus(id: string, newStatus: string) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
+
     const { error } = await supabase
       .from('orders')
       .update({ status: newStatus })
       .eq('id', id);
       
-    if (error) alert("Failed to update status.");
+    if (error) {
+      alert("Failed to update status.");
+      fetchOrders();
+    }
   }
 
+  // INSTANT LOCAL STATE UPDATE FOR ARCHIVE
   async function archiveOrder(id: string) {
     if (!confirm("Archive this order? It will move to the Archive section.")) return;
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'Archived' } : o));
+
     const { error } = await supabase.from('orders').update({ status: 'Archived' }).eq('id', id);
-    if (error) alert("Failed to archive order.");
+    if (error) {
+      alert("Failed to archive order.");
+      fetchOrders();
+    }
   }
 
+  // INSTANT LOCAL STATE UPDATE FOR RESTORE
   async function restoreOrder(id: string) {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'Delivered' } : o));
+
     const { error } = await supabase.from('orders').update({ status: 'Delivered' }).eq('id', id);
-    if (error) alert("Failed to restore order.");
+    if (error) {
+      alert("Failed to restore order.");
+      fetchOrders();
+    }
   }
 
   const handleLogin = (e: React.FormEvent) => {
@@ -262,7 +279,6 @@ function AdminDashboard() {
     return `https://wa.me/${phone}?text=${message}`;
   };
 
-  // Calculations
   const activeOrders = orders.filter(o => o.status !== 'Archived');
   const archivedOrders = orders.filter(o => o.status === 'Archived');
 
@@ -411,10 +427,6 @@ function AdminDashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 pt-8">
-        
-        {/* =========================================
-            TAB 1: LIVE ORDER QUEUE
-            ========================================= */}
         {activeTab === 'queue' && (
           <div className="animate-in fade-in duration-300">
             <div className="flex justify-between items-end mb-6">
@@ -524,9 +536,6 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* =========================================
-            TAB 2: ARCHIVE SECTION
-            ========================================= */}
         {activeTab === 'archive' && (
           <div className="space-y-8 animate-in fade-in duration-300">
             <div className="flex justify-between items-end">
@@ -625,9 +634,6 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* =========================================
-            TAB 3: ANALYTICS DASHBOARD
-            ========================================= */}
         {activeTab === 'analytics' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div>
@@ -636,7 +642,6 @@ function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              
               <Card className="border-border/60 shadow-sm bg-background">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start">
@@ -715,7 +720,6 @@ function AdminDashboard() {
                   </div>
                 </CardContent>
               </Card>
-              
             </div>
 
             <h2 className="text-xl font-bold text-foreground mt-8 mb-4">Current Workflow Status</h2>
@@ -740,9 +744,6 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* =========================================
-            TAB 4: PROMOS MANAGEMENT
-            ========================================= */}
         {activeTab === 'promos' && (
           <div className="space-y-8 animate-in fade-in duration-300">
             <div>
@@ -829,7 +830,6 @@ function AdminDashboard() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );

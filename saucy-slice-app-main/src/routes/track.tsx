@@ -22,7 +22,7 @@ type Order = {
   customer_address: string;
   total_price: number;
   order_details: string;
-  status: string; // "Pending", "Preparing", "Out for Delivery", "Delivered"
+  status: string;
   order_ref: string;
   created_at: string;
 };
@@ -44,10 +44,8 @@ function TrackOrder() {
     setLoading(true);
     setSearched(true);
 
-    // Clean up query (remove '#' if user typed it)
     const cleanQuery = searchQuery.trim().replace("#", "");
 
-    // Search Supabase orders table by order_ref or customer_phone
     const { data, error } = await supabase
       .from("orders")
       .select("*")
@@ -63,11 +61,11 @@ function TrackOrder() {
     setLoading(false);
   }
 
-  const currentOrderStatus = order?.status || "Pending";
+  // If order status is Archived, treat it as Delivered for customer tracking
+  const currentOrderStatus = order?.status === 'Archived' ? 'Delivered' : (order?.status || "Pending");
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col">
-      {/* HEADER */}
       <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-90">
@@ -83,8 +81,6 @@ function TrackOrder() {
       </header>
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
-        
-        {/* TITLE & SEARCH BAR */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full font-bold text-sm">
             <ChefHat className="w-4 h-4" /> Live Order Tracking
@@ -108,7 +104,6 @@ function TrackOrder() {
           </form>
         </div>
 
-        {/* SEARCH RESULTS */}
         {loading ? (
           <div className="text-center py-20">
             <Loader2 className="h-10 w-10 text-primary animate-spin mx-auto mb-3" />
@@ -122,8 +117,6 @@ function TrackOrder() {
           </div>
         ) : order ? (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            
-            {/* ORDER STATUS CARD */}
             <Card className="border-border/60 shadow-xl bg-white rounded-3xl overflow-hidden p-6 sm:p-8">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-6 border-b border-border/50 gap-4">
                 <div>
@@ -135,10 +128,7 @@ function TrackOrder() {
                 </Badge>
               </div>
 
-              {/* STEP PROGRESS BAR */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-8">
-                
-                {/* STEP 1 */}
                 <div className={`flex flex-col items-center text-center p-4 rounded-2xl border transition-all ${
                   ["Pending", "Preparing", "Out for Delivery", "Delivered"].includes(currentOrderStatus) 
                     ? "border-primary bg-primary/5 text-primary" 
@@ -151,7 +141,6 @@ function TrackOrder() {
                   <h4 className="font-bold text-sm text-foreground">Order Received</h4>
                 </div>
 
-                {/* STEP 2 */}
                 <div className={`flex flex-col items-center text-center p-4 rounded-2xl border transition-all ${
                   ["Preparing", "Out for Delivery", "Delivered"].includes(currentOrderStatus) 
                     ? "border-primary bg-primary/5 text-primary" 
@@ -164,7 +153,6 @@ function TrackOrder() {
                   <h4 className="font-bold text-sm text-foreground">Kitchen Preparing</h4>
                 </div>
 
-                {/* STEP 3 */}
                 <div className={`flex flex-col items-center text-center p-4 rounded-2xl border transition-all ${
                   ["Out for Delivery", "Delivered"].includes(currentOrderStatus) 
                     ? "border-primary bg-primary/5 text-primary" 
@@ -177,7 +165,6 @@ function TrackOrder() {
                   <h4 className="font-bold text-sm text-foreground">Out for Delivery</h4>
                 </div>
 
-                {/* STEP 4 */}
                 <div className={`flex flex-col items-center text-center p-4 rounded-2xl border transition-all ${
                   currentOrderStatus === "Delivered" 
                     ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/30" 
@@ -189,10 +176,8 @@ function TrackOrder() {
                   <span className="text-[10px] font-bold uppercase tracking-wider opacity-75">Step 4</span>
                   <h4 className="font-bold text-sm text-foreground">Delivered</h4>
                 </div>
-
               </div>
 
-              {/* CUSTOMER & ORDER BREAKDOWN DETAILS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-border/50">
                 <div className="space-y-3 bg-secondary/20 p-4 rounded-2xl">
                   <h4 className="font-bold text-foreground text-sm uppercase tracking-wider">Customer Information</h4>
@@ -223,12 +208,9 @@ function TrackOrder() {
                   </div>
                 </div>
               </div>
-
             </Card>
-
           </div>
         ) : null}
-
       </main>
     </div>
   );
