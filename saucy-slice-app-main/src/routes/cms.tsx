@@ -66,7 +66,7 @@ function MenuCMS() {
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
 
     if (!error && data) {
       setItems(data);
