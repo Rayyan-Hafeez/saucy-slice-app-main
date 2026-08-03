@@ -6,13 +6,6 @@ import { supabase } from "../lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,14 +13,6 @@ export const Route = createFileRoute("/")({
   }),
   component: Index,
 });
-
-const BRANCHES = [
-  { value: "ali-view-garden", label: "Ali View Garden" },
-  { value: "askari-xi", label: "Askari-XI" },
-  { value: "kot-abdul-malik", label: "Kot Abdul Malik (Branch 1)" },
-  { value: "new-kahna", label: "New Kahna (Branch 2)" },
-  { value: "ghaziabad", label: "Ghaziabad (Branch 3)" },
-];
 
 type MenuItem = {
   id: string;
@@ -53,7 +38,6 @@ function formatPrice(value: number) {
 }
 
 function Index() {
-  const [branch, setBranch] = useState(BRANCHES[0].value);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -173,18 +157,9 @@ function Index() {
               </p>
               <div className="mt-8 w-full max-w-md">
                 <div className="grid grid-cols-1 gap-3 rounded-2xl bg-card/95 p-2 shadow-xl backdrop-blur sm:grid-cols-[1fr_auto]">
-                  <div className="flex items-center gap-2 px-2">
-                    <MapPin className="h-4 w-4 shrink-0 text-primary" />
-                    <Select value={branch} onValueChange={setBranch}>
-                      <SelectTrigger className="h-11 w-full border-none bg-transparent text-sm font-medium text-card-foreground shadow-none focus:ring-0">
-                        <SelectValue placeholder="Select branch" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BRANCHES.map((b) => (
-                          <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2 sm:py-0">
+                    <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                    <span className="text-sm font-bold text-card-foreground">Ali View Garden Branch</span>
                   </div>
                   <Button size="lg" onClick={scrollToMenu} className="h-11 gap-2 rounded-xl bg-primary-foreground px-6 text-base font-bold text-primary shadow-md transition-transform hover:scale-[1.02] hover:bg-primary-foreground/90 active:scale-[0.98]">
                     Order Now <ChevronRight className="h-4 w-4" />
@@ -194,7 +169,6 @@ function Index() {
             </div>
             <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
               <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border-4 border-primary-foreground/10 shadow-2xl lg:aspect-[16/10]">
-                {/* Image loaded from the public folder */}
                 <img src="/hero-pizza.jpg" alt="Pizza" width={1280} height={720} className="h-full w-full object-cover" />
               </div>
             </div>
