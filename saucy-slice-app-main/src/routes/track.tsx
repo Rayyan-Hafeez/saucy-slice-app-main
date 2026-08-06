@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Search, Loader2, Clock, ChefHat, Bike, CheckCircle2, MapPin, Phone, User, ChevronLeft, Pizza, Star } from "lucide-react";
+import { Search, Loader2, Clock, ChefHat, Bike, CheckCircle2, MapPin, Phone, User, ChevronLeft, Pizza, Star, MessageCircle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 import { Button } from "@/components/ui/button";
@@ -247,9 +247,30 @@ function TrackOrder() {
                 </div>
               </div>
 
+              {/* WHATSAPP CONTACT BUTTON */}
+              <div className="mt-6 pt-6 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#25D366]/10 p-4 rounded-2xl">
+                <div>
+                  <h4 className="font-bold text-[#1DA851] text-sm">Need help with your order?</h4>
+                  <p className="text-xs text-muted-foreground">Reach out to our kitchen directly.</p>
+                </div>
+                <Button 
+                  className="w-full sm:w-auto bg-[#25D366] hover:bg-[#25D366]/90 text-white font-bold rounded-xl shadow-md transition-transform active:scale-95"
+                  asChild
+                >
+                  <a 
+                    href={`https://wa.me/923060147777?text=${encodeURIComponent(`Hi Pizza Saucy! I need help with my Order #${order.order_ref || order.id.split('-')[0].toUpperCase()}.`)}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    WhatsApp Support
+                  </a>
+                </Button>
+              </div>
+
               {/* STAR RATING SECTION (Only shows when Delivered or Archived) */}
               {currentOrderStatus === "Delivered" && (
-                <div className="mt-8 pt-6 border-t border-border/50 text-center bg-secondary/30 p-6 rounded-2xl">
+                <div className="mt-6 pt-6 border-t border-border/50 text-center bg-secondary/30 p-6 rounded-2xl">
                   <h4 className="font-bold text-lg text-foreground mb-1">How was your Pizza Saucy experience?</h4>
                   <p className="text-sm text-muted-foreground mb-4">Tap a star to rate your order!</p>
                   
